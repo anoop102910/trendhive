@@ -7,6 +7,8 @@ import { PrismaModule } from './client/prisma/prisma.module';
 import { CategoryModule } from './category/category.module';
 import { S3Module } from './client/s3/s3.module';
 import { ProductModule } from './product/product.module';
+import { CollectionModule } from './collection/collection.module';
+import { AttributeModule } from './attribute/attribute.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { ProductModule } from './product/product.module';
     CategoryModule,
     ProductModule,
     S3Module,
+    CollectionModule,
+    AttributeModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -133,25 +133,82 @@ model Media {
 }
 
 model Product {
-  id               String    @id @default(uuid())
-  name             String    @unique @db.VarChar(255)
-  slug             String    @unique @db.VarChar(255)
-  description      String?   @db.Text
-  price            Float
-  currency         String    @default("IND")
-  quantity         Int
-  sku              String?   @unique @db.VarChar(255)
-  isPublished      Boolean   @default(false)
-  isFeatured       Boolean   @default(false)
-  metadata         Json?
-  private_metadata Json?
-  seoSlug          String?
-  seoTitle         String?   @db.VarChar(255)
-  seoDescription   String?   @db.Text
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  createdBy       String
-  updatedBy       String?
-  category         Category? @relation(fields: [categoryId], references: [id])
-  categoryId       String?
+  id                String              @id @default(uuid())
+  name              String              @unique @db.VarChar(255)
+  slug              String              @unique @db.VarChar(255)
+  description       String?             @db.Text
+  price             Float
+  currency          String              @default("IND")
+  quantity          Int
+  sku               String?             @unique @db.VarChar(255)
+  isPublished       Boolean             @default(false)
+  isFeatured        Boolean             @default(false)
+  metadata          Json?
+  private_metadata  Json?
+  seoSlug           String?
+  seoTitle          String?             @db.VarChar(255)
+  seoDescription    String?             @db.Text
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  createdBy         String
+  updatedBy         String?
+  category          Category?           @relation(fields: [categoryId], references: [id])
+  categoryId        String?
+  CollectionProduct CollectionProduct[]
+  Collection        Collection?         @relation(fields: [collectionId], references: [id])
+  collectionId      String?
+  ProductAttribute  ProductAttribute[]
+}
+
+model CollectionProduct {
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  productId    String     @map("product_id")
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sortOrder    Int        @default(0) @map("sort_order")
+
+  @@id([collectionId, productId])
+}
+
+model Collection {
+  id                 String              @id @default(uuid())
+  name               String              @db.VarChar(250)
+  slug               String              @unique @db.VarChar(255)
+  backgroundImage    String?             @db.VarChar(100)
+  backgroundImageAlt String?             @db.VarChar(128)
+  description        Json?               @db.Json
+  products           Product[]
+  collectionProduct  CollectionProduct[]
+}
+
+model Attribute {
+  id        String           @id @default(cuid())
+  name      String // e.g., "Color", "Size"
+  values    AttributeValue[] // e.g., "Red", "Blue", "L", "XL"
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model AttributeValue {
+  id          String             @id @default(cuid())
+  value       String // e.g., "Red"
+  attribute   Attribute          @relation(fields: [attributeId], references: [id])
+  attributeId String
+  products    ProductAttribute[]
+}
+
+model ProductAttribute {
+  id               String         @id @default(cuid())
+  product          Product        @relation(fields: [productId], references: [id])
+  productId        String
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id])
+  attributeValueId String
+}
+
+model GiftCard{
+  id String @id @default(uuid())
+  code String @unique @db.VarChar(16)
+  is_active Boolean
+  
+
 }

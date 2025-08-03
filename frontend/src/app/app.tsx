@@ -10,7 +10,11 @@ import { CategoryList } from "./pages/category/CategoryList";
 import { CategoryCreate, CategoryEdit } from "./pages/category/CategoryForm";
 import { ProductList } from "./pages/product/ProductList";
 import { ProductCreate, ProductEdit } from "./pages/product/ProductForm";
+import { CollectionList } from "./pages/collection/CollectionList";
+import { CollectionCreate, CollectionEdit } from "./pages/collection/CollectionForm";
 import { dataProvider } from "./providers/data-provider";
+import { AttributeList } from "./pages/attribute/AttributeList";
+import { AttributeForm } from "./pages/attribute/AttributeForm";
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -35,6 +39,18 @@ export default function App() {
               create: "/products/create",
               edit: "/products/edit/:id",
             },
+            {
+              name: "collections",
+              list: "/collections",
+              create: "/collections/create",
+              edit: "/collections/edit/:id",
+            },
+            {
+              name: "attributes",
+              list: "/attributes",
+              create: "/attributes/create",
+              edit: "/attributes/edit/:id",
+            },
           ]}
         >
           <Routes>
@@ -57,6 +73,16 @@ export default function App() {
                 <Route index element={<ProductList />} />
                 <Route path="create" element={<ProductCreate />} />
                 <Route path="edit/:id" element={<ProductEdit />} />
+              </Route>
+              <Route path="/collections">
+                <Route index element={<CollectionList />} />
+                <Route path="create" element={<CollectionCreate />} />
+                <Route path="edit/:id" element={<CollectionEdit />} />
+              </Route>
+              <Route path="/attributes">
+                <Route index element={<AttributeList />} />
+                <Route path="create" element={<AttributeForm />} />
+                <Route path="edit/:id" element={<AttributeForm />} />
               </Route>
             </Route>
 

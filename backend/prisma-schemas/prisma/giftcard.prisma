@@ -94,7 +94,7 @@ model Product {
 
 model FulfillmentLine {
   id Int @id @default(autoincrement())
-  gift_cards GiftCard[]
+  gift_cards GiftCard[] 
   @@map("order_fulfillmentline")
 }
 
