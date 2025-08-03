@@ -29,7 +29,7 @@ export default function App() {
   const notificationProvider = useNotificationProvider();
   return (
     <BrowserRouter>
-      <ConfigProvider theme={RefineThemes.Orange}>
+      <ConfigProvider theme={RefineThemes.Green}>
         <Refine
           dataProvider={dataProvider}
           authProvider={authProvider}
