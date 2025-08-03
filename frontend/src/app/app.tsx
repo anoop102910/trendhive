@@ -5,7 +5,7 @@ import { Button, ConfigProvider } from "antd";
 import { authProvider } from "./providers/auth-provider";
 import Login from "./auth/login";
 import Register from "./auth/register";
-import { RefineThemes, ThemedLayoutV2, useNotificationProvider } from "@refinedev/antd";
+import { ThemedLayoutV2, useNotificationProvider, RefineThemes } from "@refinedev/antd";
 import { CategoryList } from "./pages/category/CategoryList";
 import { CategoryCreate, CategoryEdit } from "./pages/category/CategoryForm";
 import { ProductList } from "./pages/product/ProductList";
@@ -17,6 +17,13 @@ import { AttributeList } from "./pages/attribute/AttributeList";
 import { AttributeForm } from "./pages/attribute/AttributeForm";
 import { CouponList } from "./pages/coupon/CouponList";
 import { CouponForm } from "./pages/coupon/CouponForm";
+import {
+  AppstoreOutlined,
+  ShoppingOutlined,
+  TagsOutlined,
+  CoffeeOutlined,
+  GiftOutlined,
+} from "@ant-design/icons";
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -34,30 +41,35 @@ export default function App() {
               list: "/categories",
               create: "/categories/create",
               edit: "/categories/edit/:id",
+              icon: <AppstoreOutlined />,
             },
             {
               name: "products",
               list: "/products",
               create: "/products/create",
               edit: "/products/edit/:id",
+              icon: <ShoppingOutlined />,
             },
             {
               name: "collections",
               list: "/collections",
               create: "/collections/create",
               edit: "/collections/edit/:id",
+              icon: <TagsOutlined />,
             },
             {
               name: "attributes",
               list: "/attributes",
               create: "/attributes/create",
               edit: "/attributes/edit/:id",
+              icon: <CoffeeOutlined />,
             },
             {
               name: "coupons",
               list: "/coupons",
               create: "/coupons/create",
               edit: "/coupons/edit/:id",
+              icon: <GiftOutlined />,
             },
           ]}
         >
