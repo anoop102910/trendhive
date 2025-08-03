@@ -22,12 +22,6 @@ export class CouponService {
       throw new ConflictException('Coupon with this code already exists');
     }
 
-    if (
-      new Date(createCouponDto.startDate) > new Date(createCouponDto.endDate)
-    ) {
-      throw new BadRequestException('Start date must be before end date');
-    }
-
     const { productIds, userIds, ...couponData } = createCouponDto;
 
     return this.prisma.coupon.create({

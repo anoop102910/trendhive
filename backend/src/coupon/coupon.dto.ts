@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import { CouponType } from '@prisma/client';
 
-export const CreateCouponZodSchema = z.object({
+const baseCouponSchema = z.object({
   code: z
     .string()
     .min(3, { message: 'Coupon code must be at least 3 characters' })
@@ -18,8 +18,17 @@ export const CreateCouponZodSchema = z.object({
   userIds: z.array(z.string()).optional(),
 });
 
+export const CreateCouponZodSchema = baseCouponSchema.refine(
+  (data) =>
+    new Date(data.endDate).getTime() > new Date(data.startDate).getTime(),
+  {
+    message: 'End date must be after start date',
+    path: ['endDate'],
+  },
+);
+
 export class CreateCouponDto extends createZodDto(CreateCouponZodSchema) {}
 
-export const UpdateCouponZodSchema = CreateCouponZodSchema.partial();
+export const UpdateCouponZodSchema = baseCouponSchema.partial();
 
 export class UpdateCouponDto extends createZodDto(UpdateCouponZodSchema) {}

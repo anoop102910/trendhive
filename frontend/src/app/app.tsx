@@ -54,10 +54,10 @@ export default function App() {
               edit: "/attributes/edit/:id",
             },
             {
-              name: "coupon",
-              list: "/coupon",
-              create: "/coupon/create",
-              edit: "/coupon/edit/:id",
+              name: "coupons",
+              list: "/coupons",
+              create: "/coupons/create",
+              edit: "/coupons/edit/:id",
             },
           ]}
         >
@@ -92,7 +92,7 @@ export default function App() {
                 <Route path="create" element={<AttributeForm />} />
                 <Route path="edit/:id" element={<AttributeForm />} />
               </Route>
-              <Route path="/coupon">
+              <Route path="/coupons">
                 <Route index element={<CouponList />} />
                 <Route path="create" element={<CouponForm />} />
                 <Route path="edit/:id" element={<CouponForm />} />

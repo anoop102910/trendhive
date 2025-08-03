@@ -21,7 +21,7 @@ interface ICoupon {
 }
 
 export const CouponForm = () => {
-  const { formProps, saveButtonProps, formLoading } = useForm<ICoupon>({
+  const { formProps, saveButtonProps, formLoading, form } = useForm<ICoupon>({
     redirect: "list",
   });
 
@@ -50,6 +50,7 @@ export const CouponForm = () => {
         <Edit isLoading={formLoading} saveButtonProps={saveButtonProps}>
           <CouponFormFields
             formProps={formProps}
+            form={form}
             productSelectProps={productSelectProps}
             userSelectProps={userSelectProps}
             disabledDate={disabledDate}
@@ -59,6 +60,7 @@ export const CouponForm = () => {
         <Create isLoading={formLoading} saveButtonProps={saveButtonProps}>
           <CouponFormFields
             formProps={formProps}
+            form={form}
             productSelectProps={productSelectProps}
             userSelectProps={userSelectProps}
             disabledDate={disabledDate}
@@ -71,6 +73,7 @@ export const CouponForm = () => {
 
 interface CouponFormFieldsProps {
   formProps: FormProps;
+  form: any;
   productSelectProps: any;
   userSelectProps: any;
   disabledDate: RangePickerProps["disabledDate"];
@@ -78,12 +81,13 @@ interface CouponFormFieldsProps {
 
 const CouponFormFields: React.FC<CouponFormFieldsProps> = ({
   formProps,
+  form,
   productSelectProps,
   userSelectProps,
   disabledDate,
 }) => {
   return (
-    <Form {...formProps} layout="vertical">
+    <Form {...formProps} form={form} layout="vertical">
       <Form.Item
         label="Code"
         name="code"
@@ -113,7 +117,7 @@ const CouponFormFields: React.FC<CouponFormFieldsProps> = ({
         <Form.Item label="Discount Value" name="discountValue" rules={[{ required: true }]}>
           <InputNumber
             min={0}
-            max={formProps.getFieldValue("discountType") === "PERCENTAGE" ? 100 : undefined}
+            max={form.getFieldValue("discountType") === "PERCENTAGE" ? 100 : undefined}
           />
         </Form.Item>
 
