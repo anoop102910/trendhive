@@ -1,0 +1,368 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id                    String                  @id @default(uuid())
+  name                  String                  @db.VarChar(250)
+  slug                  String                  @unique @db.VarChar(255)
+  description           Json?                   @db.Json
+  description_plaintext String?                 @db.Text
+  updatedAt             DateTime?               @db.Timestamptz(6)
+  parentId              String?                 @map("parent_id")
+  parent                Category?               @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: Cascade, map: "category_parent_id_fkey")
+  children              Category[]              @relation("CategoryToCategory")
+  backgroundImage       String?                 @db.VarChar(100)
+  backgroundImageAlt    String?                 @db.VarChar(128)
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+  products              Product[]
+  translations          CategoryTranslation[]
+
+  @@index([updatedAt], name: "updated_at_idx")
+  @@index([name, slug, description_plaintext], name: "category_search_name_slug_gin", type: Gin)
+  @@map("product_category")
+}
+
+model CategoryTranslation {
+  id            String  @id @default(uuid())
+  languageCode  String  @map("language_code")
+  categoryId    String  @map("category_id")
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Cascade, map: "product_categorytranslation_category_id_fkey")
+  name          String? @db.VarChar(128)
+  slug          String?
+  description   Json?   @db.Json
+
+  @@unique([languageCode, categoryId], name: "product_categorytranslation_language_code_category_id_key")
+  @@unique([languageCode, slug], name: "uniq_lang_slug_categorytransl")
+  @@map("product_categorytranslation")
+}
+
+model ProductType {
+  id                String    @id @default(uuid())
+  name              String    @db.VarChar(250)
+  slug              String    @unique @db.VarChar(255)
+  kind              String    @db.VarChar(32)
+  hasVariants       Boolean   @default(true)
+  isShippingRequired Boolean   @default(true)
+  isDigital         Boolean   @default(false)
+  weight          Float     @default(0)
+  weightUnit        String  @default("lb")
+  taxClassId        String?   @map("tax_class_id")
+  tax_class       TaxClass? @relation(fields: [taxClassId], references: [id], onDelete: SetNull, map: "product_producttype_tax_class_id_fkey")
+  metadata        Metadata[]
+  privateMetadata PrivateMetadata[]
+  products        Product[]
+
+  @@index([name, slug], name: "product_type_search_gin", type: Gin)
+  @@map("product_producttype")
+}
+
+model Product {
+  id                   String                  @id @default(uuid())
+  productTypeId        String                  @map("product_type_id")
+  productType          ProductType             @relation(fields: [productTypeId], references: [id], onDelete: Cascade, map: "product_product_product_type_id_fkey")
+  name                 String                  @db.VarChar(250)
+  slug                 String                  @unique @db.VarChar(255)
+  description          Json?                   @db.Json
+  description_plaintext String?                 @db.Text
+  search_document      String                  @default("") @db.Text
+  search_vector        String?                 @db.Text
+  search_index_dirty   Boolean                 @default(false)
+  categoryId           String?                 @map("category_id")
+  category             Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull, map: "product_product_category_id_fkey")
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  weight          Float?                 
+  weightUnit        String? 
+  defaultVariantId     String?                 @unique @map("default_variant_id")
+  defaultVariant       ProductVariant?         @relation("ProductToProductVariant", fields: [defaultVariantId], references: [id], onDelete: SetNull, map: "product_product_default_variant_id_fkey")
+  rating               Float?                  
+  taxClassId           String?                 @map("tax_class_id")
+  tax_class          TaxClass?               @relation(fields: [taxClassId], references: [id], onDelete: SetNull, map: "product_product_tax_class_id_fkey")
+  metadata             Metadata[]
+  privateMetadata      PrivateMetadata[]
+  externalReference    ExternalReference[]
+  variants             ProductVariant[]
+  media                ProductMedia[]
+  channelListings      ProductChannelListing[]
+  collections          Collection[]            @relation(through: CollectionProduct)
+  translations         ProductTranslation[]
+  collectionProduct    CollectionProduct[]
+
+  @@index([search_document], name: "product_search_gin", type: Gin)
+  @@index([search_vector], name: "product_tsearch", type: Gin)
+  @@index([name, slug], name: "product_gin", type: Gin)
+  @@index([categoryId, slug])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("product_product")
+}
+
+model ProductTranslation {
+  id            String  @id @default(uuid())
+  languageCode  String  @map("language_code")
+  productId     String  @map("product_id")
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_producttranslation_product_id_fkey")
+  name          String? @db.VarChar(250)
+  slug          String?
+  description   Json?   @db.Json
+
+  @@unique([languageCode, productId], name: "product_producttranslation_language_code_product_id_key")
+  @@unique([languageCode, slug], name: "uniq_lang_slug_producttransl")
+  @@map("product_producttranslation")
+}
+
+model ProductChannelListing {
+  id                      String    @id @default(uuid())
+  productId               String    @map("product_id")
+  product                 Product   @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_productchannellisting_product_id_fkey")
+  channelId               String    @map("channel_id")
+  channel                 Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade, map: "product_productchannellisting_channel_id_fkey")
+  visibleInListings       Boolean   @default(false)
+  availableForPurchaseAt  DateTime? @map("available_for_purchase_at") @db.Timestamptz(6)
+  currency                String    @db.VarChar(3)
+  discountedPriceAmount Decimal?  @map("discounted_price_amount") @db.Decimal
+  publishedAt             DateTime? @map("published_at") @db.Timestamptz(6)
+  isPublished             Boolean   @default(false) @map("is_published")
+  publicationToken        String?   @map("publication_token")
+  discounted_price_dirty  Boolean   @default(false)
+
+  @@unique([productId, channelId], name: "product_productchannellisting_product_id_channel_id_key")
+  @@index([publishedAt])
+  @@index([discountedPriceAmount])
+  @@map("product_productchannellisting")
+}
+
+model ProductVariant {
+  id                       String                         @id @default(uuid())
+  sku                      String?                        @unique @db.VarChar(255)
+  name                     String                         @db.VarChar(255)
+  productId                String                         @map("product_id")
+  product                  Product                        @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_productvariant_product_id_fkey")
+  media                    ProductMedia[]                 @relation(through: VariantMedia)
+  trackInventory           Boolean                        @default(true)
+  isPreorder               Boolean                        @default(false)
+  preorderEndDate          DateTime?                      @map("preorder_end_date") @db.Timestamptz(6)
+  preorderGlobalThreshold  Int?                           @map("preorder_global_threshold")
+  quantityLimitPerCustomer Int?                           @map("quantity_limit_per_customer")
+  createdAt                DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  weight          Float?                         
+  weightUnit        String?
+  sortOrder                Int                            @default(0) @map("sort_order")
+  metadata                 Metadata[]
+  privateMetadata          PrivateMetadata[]
+  externalReference        ExternalReference[]
+  translations             ProductVariantTranslation[]
+  channelListings          ProductVariantChannelListing[]
+  digitalContent           DigitalContent?
+  Product                  Product?                       @relation("ProductToProductVariant")
+  variant_media            VariantMedia[]
+
+  @@index([name, sku], name: "variant_gin", type: Gin)
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("product_productvariant")
+}
+
+model ProductVariantTranslation {
+  id              String        @id @default(uuid())
+  languageCode    String        @map("language_code")
+  productVariantId String        @map("product_variant_id")
+  productVariant  ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade, map: "product_productvarianttranslation_product_variant_id_fkey")
+  name            String?       @db.VarChar(255)
+
+  @@unique([languageCode, productVariantId], name: "product_productvarianttranslation_language_code_product_variant_id_key")
+  @@map("product_productvarianttranslation")
+}
+
+model ProductVariantChannelListing {
+  id                         String                           @id @default(uuid())
+  variantId                  String                           @map("variant_id")
+  variant                    ProductVariant                   @relation(fields: [variantId], references: [id], onDelete: Cascade, map: "product_productvariantchannellisting_variant_id_fkey")
+  channelId                  String                           @map("channel_id")
+  channel                    Channel                          @relation(fields: [channelId], references: [id], onDelete: Cascade, map: "product_productvariantchannellisting_channel_id_fkey")
+  currency                   String                           @db.VarChar(3)
+  priceAmount          Decimal?                         @map("price_amount") @db.Decimal
+  costPriceAmount      Decimal?                       @map("cost_price_amount") @db.Decimal
+  priorPriceAmount     Decimal?                     @map("prior_price_amount") @db.Decimal
+  discountedPriceAmount Decimal?                         @map("discounted_price_amount") @db.Decimal
+  promotion_rules            VariantChannelListingPromotionRule[]
+  preorderQuantityThreshold  Int?                             @map("preorder_quantity_threshold")
+
+  @@unique([variantId, channelId], name: "product_productvariantchannellisting_variant_id_channel_id_key")
+  @@index([priceAmount, channelId], name: "product_productvariantchannellisting_price_amount_channel_id_idx", type: Gin)
+  @@map("product_productvariantchannellisting")
+}
+
+
+model VariantChannelListingPromotionRule {
+  id                      String                     @id @default(uuid())
+  variantChannelListingId String                     @map("variant_channel_listing_id")
+  variantChannelListing   ProductVariantChannelListing @relation(fields: [variantChannelListingId], references: [id], onDelete: Cascade, map: "product_variantchannellistingpromotionrule_variant_channel_listing_id_fkey")
+  promotionRuleId         String                     @map("promotion_rule_id")
+  promotion_rule            PromotionRule               @relation(fields: [promotionRuleId], references: [id], onDelete: Cascade, map: "product_variantchannellistingpromotionrule_promotion_rule_id_fkey")
+  discountAmount          Decimal                    @default(0) @map("discount_amount") @db.Decimal
+  currency                String                     @db.VarChar(3)
+
+  @@unique([variantChannelListingId, promotionRuleId], name: "product_variantchannellistingpromotionrule_variant_channel_listing_id_promotion_rule_id_key")
+  @@map("product_variantchannellistingpromotionrule")
+}
+
+model DigitalContent {
+  id                  String         @id @default(uuid())
+  useDefaultSettings  Boolean        @default(true)
+  automaticFulfillment Boolean        @default(false)
+  contentType         String         @default("file") @db.VarChar(128)
+  productVariantId  String         @unique @map("product_variant_id")
+  productVariant    ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade, map: "product_digitalcontent_product_variant_id_fkey")
+  contentFile         String?        @db.VarChar(100)
+  maxDownloads        Int?           @map("max_downloads")
+  urlValidDays        Int?           @map("url_valid_days")
+  urls                DigitalContentUrl[]
+  metadata            Metadata[]
+  privateMetadata     PrivateMetadata[]
+
+  @@map("product_digitalcontent")
+}
+
+model DigitalContentUrl {
+  id        String   @id @default(uuid())
+  tokenId   String   @unique @map("token")
+  contentId String   @map("content_id")
+  content   DigitalContent @relation(fields: [contentId], references: [id], onDelete: Cascade, map: "product_digitalcontenturl_content_id_fkey")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  downloadNum Int @default(0) @map("download_num")
+  lineId String? @unique @map("line_id")
+
+  @@map("product_digitalcontenturl")
+}
+
+
+model ProductMedia {
+  id             String           @id @default(uuid())
+  productId      String?          @map("product_id")
+  product        Product?         @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_productmedia_product_id_fkey")
+  image          String?          @db.VarChar(100)
+  alt            String           @db.VarChar(250)
+  type           String           @default("image") @db.VarChar(32)
+  externalUrl    String?          @db.VarChar(256)
+  oembedData     Json             @default("{}") @db.Json
+  toRemove       Boolean          @default(false) @map("to_remove")
+  sortOrder      Int              @default(0) @map("sort_order")
+  variant_media  VariantMedia[]
+  metadata       Metadata[]
+  privateMetadata PrivateMetadata[]
+
+  @@map("product_productmedia")
+}
+
+model VariantMedia {
+  variantId String       @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade, map: "product_variantmedia_variant_id_fkey")
+  mediaId   String       @map("media_id")
+  media     ProductMedia   @relation(fields: [mediaId], references: [id], onDelete: Cascade, map: "product_variantmedia_media_id_fkey")
+
+  @@id([variantId, mediaId])
+  @@map("product_variantmedia")
+}
+
+model CollectionProduct {
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade, map: "product_collectionproduct_collection_id_fkey")
+  productId    String     @map("product_id")
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_collectionproduct_product_id_fkey")
+  sortOrder  Int        @default(0) @map("sort_order")
+
+  @@id([collectionId, productId])
+  @@map("product_collectionproduct")
+}
+
+model Collection {
+  id                    String                   @id @default(uuid())
+  name                  String                   @db.VarChar(250)
+  slug                  String                   @unique @db.VarChar(255)
+  backgroundImage       String?                  @db.VarChar(100)
+  backgroundImageAlt    String?                  @db.VarChar(128)
+  description           Json?                    @db.Json
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+  products              Product[]                @relation(through: CollectionProduct)
+  channelListings       CollectionChannelListing[]
+  translations          CollectionTranslation[]
+  collectionProduct    CollectionProduct[]
+
+  @@index([name, slug], name: "collection_search_gin", type: Gin)
+  @@map("product_collection")
+}
+
+
+model CollectionChannelListing {
+  id           String     @id @default(uuid())
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade, map: "product_collectionchannellisting_collection_id_fkey")
+  channelId    String     @map("channel_id")
+  channel      Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade, map: "product_collectionchannellisting_channel_id_fkey")
+  publishedAt  DateTime?  @map("published_at") @db.Timestamptz(6)
+  isPublished  Boolean    @default(false) @map("is_published")
+  publicationToken String?   @map("publication_token")
+
+  @@unique([collectionId, channelId], name: "product_collectionchannellisting_collection_id_channel_id_key")
+  @@map("product_collectionchannellisting")
+}
+
+model CollectionTranslation {
+  id           String     @id @default(uuid())
+  languageCode String     @map("language_code")
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade, map: "product_collectiontranslation_collection_id_fkey")
+  name         String?    @db.VarChar(128)
+  slug          String?
+  description  Json?      @db.Json
+
+  @@unique([languageCode, collectionId], name: "product_collectiontranslation_language_code_collection_id_key")
+  @@unique([languageCode, slug], name: "uniq_lang_slug_collectiontransl")
+  @@map("product_collectiontranslation")
+}
+
+model Channel {
+  id                    String                  @id @default(uuid())
+  productListings       ProductChannelListing[]
+  variantListings       ProductVariantChannelListing[]
+  collectionListings    CollectionChannelListing[]
+}
+
+model TaxClass {
+  id            String        @id @default(uuid())
+  product_types ProductType[]
+  products      Product[]
+}
+
+model PromotionRule {
+  id String @id @default(uuid())
+  variantlistingpromotionrule       VariantChannelListingPromotionRule[]
+}
+
+model Metadata {
+  id String @id @default(uuid())
+  key String
+  value String
+}
+
+model PrivateMetadata {
+  id String @id @default(uuid())
+  key String
+  value String
+}
+
+model ExternalReference {
+    id String @id @default(uuid())
+    reference String
+    externalId String
+}

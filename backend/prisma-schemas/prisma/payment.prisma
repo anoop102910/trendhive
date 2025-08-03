@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TransactionItem {
+  id                    Int       @id @default(autoincrement())
+  token                 String    @unique @default(uuid())
+  use_old_id            Boolean   @default(false)
+  created_at            DateTime  @default(now())
+  modified_at           DateTime  @updatedAt
+  idempotency_key       String?   @map("idempotency_key")
+  name                  String?   @default("")
+  message               String?   @default("")
+  psp_reference         String?   @map("psp_reference")
+  available_actions     String[]
+  currency              String    @map("currency")
+  charged_value         Decimal   @map("charged_value")
+  authorized_value      Decimal   @map("authorized_value")
+  refunded_value        Decimal   @map("refunded_value")
+  canceled_value        Decimal   @map("canceled_value")
+  refund_pending_value  Decimal   @map("refund_pending_value")
+  charge_pending_value  Decimal   @map("charge_pending_value")
+  authorize_pending_value Decimal   @map("authorize_pending_value")
+  cancel_pending_value  Decimal   @map("cancel_pending_value")
+  external_url          String?   @map("external_url")
+  checkoutId            Int?      @map("checkout_id")
+  checkout              Checkout? @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  orderId               Int?      @map("order_id")
+  order                 Order?    @relation(fields: [orderId], references: [id], onDelete: Protect)
+  userId                Int?      @map("user_id")
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appId                 Int?      @map("app_id")
+  app                   App?      @relation(fields: [appId], references: [id], onDelete: SetNull)
+  app_identifier        String?   @map("app_identifier")
+  last_refund_success   Boolean   @default(true)
+  cc_first_digits       String?   @map("cc_first_digits")
+  cc_last_digits        String?   @map("cc_last_digits")
+  cc_brand              String?   @map("cc_brand")
+  cc_exp_month          Int?      @map("cc_exp_month")
+  cc_exp_year           Int?      @map("cc_exp_year")
+  payment_method_type   String?   @map("payment_method_type")
+  payment_method_name   String?   @map("payment_method_name")
+  events                TransactionEvent[]
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+
+  @@index([payment_method_type], map: "payment_method_type_ids")
+  @@index([cc_brand], map: "cc_brand_idx")
+  @@unique([app_identifier, idempotency_key], map: "unique_transaction_idempotency")
+  @@map("payment_transactionitem")
+}
+
+model TransactionEvent {
+  id                    Int          @id @default(autoincrement())
+  created_at            DateTime     @default(now())
+  idempotency_key       String?      @map("idempotency_key")
+  psp_reference         String?      @map("psp_reference")
+  message               String?      @default("")
+  transactionId         Int          @map("transaction_id")
+  transaction           TransactionItem @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  external_url          String?      @map("external_url")
+  currency              String       @map("currency")
+  type                  String       @default("info")
+  amount_value          Decimal      @map("amount_value")
+  userId                Int?         @map("user_id")
+  user                  User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appId                 Int?         @map("app_id")
+  app                   App?         @relation(fields: [appId], references: [id], onDelete: SetNull)
+  app_identifier        String?      @map("app_identifier")
+  include_in_calculations Boolean @default(false)
+  related_granted_refundId Int? @map("related_granted_refund_id")
+  related_granted_refund OrderGrantedRefund? @relation(fields: [related_granted_refundId], references: [id], onDelete: SetNull)
+
+  @@unique([transactionId, idempotency_key], map: "unique_transaction_event_idempotency")
+  @@map("payment_transactionevent")
+}
+
+model Payment {
+  id                 Int       @id @default(autoincrement())
+  gateway          String    @map("gateway")
+  is_active        Boolean   @default(true)
+  to_confirm       Boolean   @default(false)
+  partial          Boolean   @default(false)
+  created_at       DateTime  @default(now())
+  modified_at      DateTime  @updatedAt
+  charge_status    String    @default("not_charged")
+  token            String    @default("")
+  total            Decimal   @default(0.0)
+  captured_amount  Decimal   @default(0.0)
+  currency         String    @map("currency")
+  checkoutId       Int?      @map("checkout_id")
+  checkout         Checkout? @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  orderId          Int?      @map("order_id")
+  order            Order?    @relation(fields: [orderId], references: [id], onDelete: Protect)
+  store_payment_method String    @default("none")
+  billing_email      String?   @map("billing_email")
+  billing_first_name String?   @map("billing_first_name")
+  billing_last_name  String?   @map("billing_last_name")
+  billing_company_name String?   @map("billing_company_name")
+  billing_address_1  String?   @map("billing_address_1")
+  billing_address_2  String?   @map("billing_address_2")
+  billing_city       String?   @map("billing_city")
+  billing_city_area  String?   @map("billing_city_area")
+  billing_postal_code String?   @map("billing_postal_code")
+  billing_country_code String?   @map("billing_country_code")
+  billing_country_area String?   @map("billing_country_area")
+  cc_first_digits    String    @default("")
+  cc_last_digits     String    @default("")
+  cc_brand           String    @default("")
+  cc_exp_month       Int?      @map("cc_exp_month")
+  cc_exp_year        Int?      @map("cc_exp_year")
+  payment_method_type String?   @map("payment_method_type")
+  customer_ip_address String?   @map("customer_ip_address")
+  extra_data         String    @default("")
+  return_url         String?   @map("return_url")
+  psp_reference      String?   @map("psp_reference") @db.Index
+  transactions     Transaction[]
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+
+  @@index([orderId, is_active, charge_status], map: "order_id_is_active_charge_status")
+  @@map("payment_payment")
+}
+
+model Transaction {
+  id                        Int      @id @default(autoincrement())
+  created_at                DateTime @default(now())
+  paymentId                 Int      @map("payment_id")
+  payment                   Payment  @relation(fields: [paymentId], references: [id], onDelete: Protect)
+  token                     String   @default("")
+  kind                      String   @map("kind")
+  is_success                Boolean  @default(false)
+  action_required           Boolean  @default(false)
+  action_required_data      Json     @map("action_required_data")
+  currency                  String   @map("currency")
+  amount                    Decimal  @default(0.0)
+  error                     String?  @map("error")
+  customer_id               String?  @map("customer_id")
+  gateway_response          Json     @map("gateway_response")
+  already_processed         Boolean  @default(false)
+  legacy_adyen_plugin_result_code String? @map("legacy_adyen_plugin_result_code")
+  legacy_adyen_plugin_payment_method String? @map("legacy_adyen_plugin_payment_method")
+
+  @@index([token], map: "token_idx")
+  @@map("payment_transaction")
+}
+
+model Checkout {
+  id Int @id @default(autoincrement())
+  payment_transactions TransactionItem[] @relation(name: "CheckoutToTransactionItem")
+  payments Payment[] @relation(name: "CheckoutToPayment")
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  payment_transactions TransactionItem[] @relation(name: "OrderToTransactionItem")
+  payments Payment[] @relation(name: "OrderToPayment")
+}
+
+model User {
+  id Int @id @default(autoincrement())
+  transactionItems TransactionItem[]
+  transactionEvents TransactionEvent[]
+}
+
+model App {
+  id Int @id @default(autoincrement())
+  transactionItems TransactionItem[]
+  transactionEvents TransactionEvent[]
+}
+
+model OrderGrantedRefund {
+  id Int @id @default(autoincrement())
+  transaction_events TransactionEvent[]
+}
+
+model Metadata {
+  id                  Int       @id @default(autoincrement())
+  key                 String
+  value               String
+  transactionItemId   Int?      @map("transaction_item_id")
+  transactionItem   TransactionItem? @relation(fields: [transactionItemId], references: [id])
+  paymentId   Int?      @map("payment_id")
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  @@map("core_metadata")
+}
+
+model PrivateMetadata {
+  id                  Int       @id @default(autoincrement())
+  key                 String
+  value               String
+  transactionItemId   Int?      @map("transaction_item_id")
+  transactionItem   TransactionItem? @relation(fields: [transactionItemId], references: [id])
+  paymentId   Int?      @map("payment_id")
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  @@map("core_privatemetadata")
+}

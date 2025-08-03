@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Menu {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  name        String
+  slug        String    @unique
+  items       MenuItem[]
+  metadata    Json      @default("{}")
+  privateMetadata Json @default("{}")
+
+  @@map("menu_menu")
+}
+
+model MenuItem {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  menuId      Int
+  menu        Menu      @relation(fields: [menuId], references: [id])
+  name        String
+  parentId    Int?      @map("parent_id")
+  parent      MenuItem? @relation("MenuItemToMenuItem", fields: [parentId], references: [id])
+  children    MenuItem[] @relation("MenuItemToMenuItem")
+  url         String?   @db.VarChar(256)
+  categoryId  Int?      @map("category_id")
+  category    Category? @relation(fields: [categoryId], references: [id])
+  collectionId Int?      @map("collection_id")
+  collection  Collection? @relation(fields: [collectionId], references: [id])
+  pageId      Int?      @map("page_id")
+  page        Page?     @relation(fields: [pageId], references: [id])
+  sortOrder   Int
+  translations MenuItemTranslation[]
+  metadata    Json      @default("{}")
+  privateMetadata Json @default("{}")
+
+  @@index([menuId])
+  @@map("menu_menuitem")
+}
+
+model MenuItemTranslation {
+  id           Int      @id @default(autoincrement())
+  languageCode String   @map("language_code")
+  menuItemId   Int      @map("menu_item_id")
+  menuItem     MenuItem @relation(fields: [menuItemId], references: [id])
+  name         String   @db.VarChar(128)
+
+  @@unique([languageCode, menuItemId])
+  @@index([menuItemId])
+  @@map("menu_menuitemtranslation")
+}
+
+model Category {
+  id Int @id @default(autoincrement())
+  menuItems MenuItem[]
+
+  @@map("product_category")
+}
+
+model Collection {
+  id Int @id @default(autoincrement())
+  menuItems MenuItem[]
+
+  @@map("product_collection")
+}
+
+model Page {
+  id Int @id @default(autoincrement())
+  menuItems MenuItem[]
+
+  @@map("page_page")
+}

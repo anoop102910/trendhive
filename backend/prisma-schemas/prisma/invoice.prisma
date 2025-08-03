@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  metadata       Json?          
+  privateMetadata Json?          
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId        Int?          @map("order_id")
+  number         String?       
+  created        DateTime?     
+  externalUrl    String?       @map("external_url") @db.VarChar(2048)
+  invoiceFile    String        @map("invoice_file")
+  events         InvoiceEvent[]
+  status         String
+  message        String?       
+  name           String?
+
+  @@index([createdAt], name: "invoice_created_at_idx")
+  @@map("Invoice")
+}
+
+model InvoiceEvent {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @default(now())
+  type       String
+  invoice    Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceId  Int?     @map("invoice_id")
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId    Int?     @map("order_id")
+  user       String?  @map("user_id") // Assuming AUTH_USER_MODEL points to a model with an id field of type String
+  app        App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
+  appId      Int?     @map("app_id")
+  parameters Json   @default("{}")
+
+  @@map("InvoiceEvent")
+}
+
+model Order {
+  id            Int            @id @default(autoincrement())
+  invoices      Invoice[]
+  invoice_events InvoiceEvent[]
+
+  @@map("Order")
+}
+
+model App {
+    id            Int            @id @default(autoincrement())
+    invoice_events InvoiceEvent[]
+
+    @@map("App")
+}

@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ShippingZone {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  countries   String[] @db.Text
+  default     Boolean  @default(false)
+  description String   @db.Text @default("")
+  channels    Channel[] @relation("ShippingZoneToChannel")
+  shippingMethods ShippingMethod[]
+  metadata    Metadata[] @relation("ShippingZoneToMetadata")
+  privateMetadata PrivateMetadata[] @relation("ShippingZoneToPrivateMetadata")
+
+  @@index([countries], map: "s_z_countries_idx")
+}
+
+enum ShippingMethodType {
+  PRICE_BASED
+  WEIGHT_BASED
+}
+
+model ShippingMethod {
+  id                   Int                       @id @default(autoincrement())
+  name                 String                    @db.VarChar(100)
+  type                 ShippingMethodType        @db.VarChar(30)
+  shippingZoneId       Int
+  shippingZone         ShippingZone              @relation(fields: [shippingZoneId], references: [id])
+  minimumOrderWeight   Float?                    @map("minimum_order_weight")
+  minimumOrderWeightUnit String?                   @map("minimum_order_weight_unit")
+  maximumOrderWeight   Float?                    @map("maximum_order_weight")
+  maximumOrderWeightUnit String?                   @map("maximum_order_weight_unit")
+  excludedProducts   Product[] @relation("ShippingMethodToProduct")
+  maximumDeliveryDays  Int?                      @map("maximum_delivery_days")
+  minimumDeliveryDays  Int?                      @map("minimum_delivery_days")
+  description        Json?                      @db.Json
+  taxClassId         Int?                      @map("tax_class_id")
+  taxClass           TaxClass?                 @relation(fields: [taxClassId], references: [id])
+  channelListings    ShippingMethodChannelListing[]
+  postalCodeRules    ShippingMethodPostalCodeRule[]
+  translations       ShippingMethodTranslation[]
+  metadata    Metadata[] @relation("ShippingMethodToMetadata")
+  privateMetadata PrivateMetadata[] @relation("ShippingMethodToPrivateMetadata")
+
+  @@map("shipping_shippingmethod")
+}
+
+enum PostalCodeRuleInclusionType {
+  EXCLUDE
+  INCLUDE
+}
+
+model ShippingMethodPostalCodeRule {
+  id              Int                         @id @default(autoincrement())
+  shippingMethodId  Int
+  shippingMethod  ShippingMethod              @relation(fields: [shippingMethodId], references: [id])
+  start           String                      @db.VarChar(32)
+  end             String?                     @db.VarChar(32)
+  inclusionType   PostalCodeRuleInclusionType @default(EXCLUDE) @db.VarChar(32)
+
+  @@unique([shippingMethodId, start, end], map: "shipping_shippingmethodpostalcoderule_shipping_method_id_start_end_key")
+  @@map("shipping_shippingmethodpostalcoderule")
+}
+
+model ShippingMethodChannelListing {
+  id                      Int      @id @default(autoincrement())
+  shippingMethodId          Int
+  shippingMethod          ShippingMethod @relation(fields: [shippingMethodId], references: [id])
+  channelId               Int
+  channel               Channel @relation(fields: [channelId], references: [id])
+  minimumOrderPriceAmount Decimal? @db.Decimal
+  currency                String   @db.VarChar
+  maximumOrderPriceAmount Decimal? @db.Decimal
+  priceAmount             Decimal  @default(0) @db.Decimal
+
+  @@unique([shippingMethodId, channelId], map: "shipping_shippingmethodchannellisting_shipping_method_id_channel_id_key")
+  @@map("shipping_shippingmethodchannellisting")
+  @@ordering([

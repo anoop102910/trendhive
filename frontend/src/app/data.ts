@@ -1,0 +1,116 @@
+import { Contact, Message } from "./chat"
+
+export const contacts: Contact[] = [
+    {
+      id: "1",
+      name: "Design chat",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "Josiah Lowery sent an attachment",
+      timestamp: "4m",
+      online: true,
+      unread: 2,
+    },
+    {
+      id: "2",
+      name: "Gannon Campos",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "You: Hey! Are you ready for...",
+      timestamp: "20m",
+    },
+    {
+      id: "3",
+      name: "Jayden Church",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "I prepared some comps...",
+      timestamp: "1h",
+      unread: 1,
+    },
+    {
+      id: "4",
+      name: "Jacob Mcleod",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "You: Thanks for the feedback",
+      timestamp: "10m",
+    },
+    {
+      id: "5",
+      name: "Josiah Lowery",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "You: Did I ask a discount is on th...",
+      timestamp: "35m",
+      online: true,
+    },
+    {
+      id: "6",
+      name: "Zaid Myers",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "You: Hey! We are ready for th...",
+      timestamp: "40m",
+    },
+    {
+      id: "7",
+      name: "Anthony Cardenas",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "What do you think?",
+      timestamp: "1d",
+    },
+    {
+      id: "8",
+      name: "Connor Garcia",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "You: I think it would be perfec...",
+      timestamp: "1d",
+    },
+    {
+      id: "9",
+      name: "Vanessa Cox",
+      avatar: "/placeholder.svg?height=40&width=40",
+      lastMessage: "Voice message",
+      timestamp: "2d",
+    },
+  ]
+  
+  export const messages: Message[] = [
+    {
+      id: "1",
+      sender: "Josiah Lowery",
+      avatar: "/placeholder.svg?height=32&width=32",
+      content: "I need you to focus on our design system. I think we should focus on our project!",
+      timestamp: "9:15 AM",
+      type: "text",
+    },
+    {
+      id: "2",
+      sender: "Alex Hunt",
+      avatar: "/placeholder.svg?height=32&width=32",
+      content: "Hey guys! Important news!",
+      timestamp: "10:16 AM",
+      type: "text",
+    },
+    {
+      id: "3",
+      sender: "Alex Hunt",
+      avatar: "/placeholder.svg?height=32&width=32",
+      content: "Our team dynamics has successfully completed his production period and is now part of our team!",
+      timestamp: "10:16 AM",
+      type: "text",
+    },
+    {
+      id: "4",
+      sender: "Josiah Lowery",
+      avatar: "/placeholder.svg?height=32&width=32",
+      content: "Before my congratulations, let me asked to work with you on a new project 😊",
+      timestamp: "10:20 AM",
+      type: "text",
+    },
+    {
+      id: "5",
+      sender: "Josiah Lowery",
+      avatar: "/placeholder.svg?height=32&width=32",
+      content: "",
+      timestamp: "10:20 AM",
+      type: "image",
+      imageUrl: "/placeholder.svg?height=200&width=300",
+    },
+  ]
+  

@@ -1,0 +1,44 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Permission {
+  id             Int      @id @default(autoincrement())
+  name           String   @db.VarChar(255)
+  contentTypeId  Int      @map("content_type_id")
+  codename       String   @db.VarChar(100)
+  contentType    ContentType @relation(fields: [contentTypeId], references: [id], onDelete: Cascade, map: "permission_content_type_id_fkey")
+  user_set       Account[]
+
+  @@unique([contentTypeId, codename], name: "permission_content_type_id_codename_key")
+  @@map("auth_permission")
+}
+
+model ContentType {
+  id        Int      @id @default(autoincrement())
+  appLabel  String   @map("app_label") @db.VarChar(100)
+  model     String   @db.VarChar(100)
+  permission Permission[]
+
+  @@unique([appLabel, model], name: "content_type_app_label_model_key")
+  @@map("django_content_type")
+}
+
+model Account {
+  id              Int         @id @default(autoincrement())
+  isSuperuser     Boolean     @default(false) @map("is_superuser")
+  groups          Group[]     @relation("AccountToGroup")
+  userPermissions Permission[] @relation("AccountToPermission")
+}
+
+model Group {
+  id      Int       @id @default(autoincrement())
+  account Account[] @relation("AccountToGroup")
+
+  @@map("account_group")
+}

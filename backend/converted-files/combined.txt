@@ -1,0 +1,1888 @@
+// Combined file generated on 2025-07-27T17:10:46.721Z
+// Target Language: nest js
+
+
+// --- saleor/account/tasks.py ---
+
+import { Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { UserService } from './user.service';
+import { PluginManagerService } from '../plugin-manager/plugin-manager.service';
+import { SiteService } from '../site/site.service';
+import { EventsService } from '../events/events.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SearchService } from '../search/search.service';
+import { User } from './user.entity';
+import { URLSearchParams } from 'url';
+import { TokenService } from '../core/tokens/token.service';
+
+@Injectable()
+export class UserTasks {
+  constructor(
+    @InjectQueue('password-reset') private passwordResetQueue: Queue,
+    @InjectQueue('user-creation') private userCreationQueue: Queue,
+    private userService: UserService,
+    private pluginManagerService: PluginManagerService,
+    private siteService: SiteService,
+    private eventsService: EventsService,
+    private notificationsService: NotificationsService,
+    private searchService: SearchService,
+    private tokenService: TokenService,
+  ) {}
+
+  async addTriggerSendPasswordResetNotificationTask(
+    redirectUrl: string,
+    userPk: number,
+    contextData: any,
+    channelSlug: string,
+  ): Promise<void> {
+    await this.passwordResetQueue.add('triggerSendPasswordResetNotification', {
+      redirectUrl,
+      userPk,
+      contextData,
+      channelSlug,
+    });
+  }
+
+  async addFinishCreatingUserTask(
+    userPk: number,
+    redirectUrl: string,
+    channelSlug: string,
+    contextData: any,
+  ): Promise<void> {
+    await this.userCreationQueue.add('finishCreatingUser', {
+      userPk,
+      redirectUrl,
+      channelSlug,
+      contextData,
+    });
+  }
+
+  async triggerSendPasswordResetNotification(
+    redirectUrl: string,
+    userPk: number,
+    contextData: any,
+    channelSlug: string,
+  ): Promise<void> {
+    if (!userPk) {
+      return;
+    }
+
+    const user = await this.userService.findUserById(userPk);
+
+    if (!channelSlug && !user.isStaff) {
+      console.warn(
+        `Channel slug was not provided for user ${userPk} in request password reset.`,
+      );
+    }
+
+    const manager = await this.pluginManagerService.getPluginManager(
+      contextData,
+    );
+
+    await this.notificationsService.sendPasswordResetNotification(
+      redirectUrl,
+      user,
+      manager,
+      channelSlug,
+      user.isStaff,
+    );
+
+    const token = this.tokenService.makeToken(user);
+    const redirectParams = this.prepareRedirectUrl(user, redirectUrl, token);
+
+    if (user.isStaff) {
+      await this.eventsService.callEvent(
+        manager.staffSetPasswordRequested,
+        user,
+        channelSlug,
+        token,
+        redirectParams,
+      );
+    } else {
+      await this.eventsService.callEvent(
+        manager.accountSetPasswordRequested,
+        user,
+        channelSlug,
+        token,
+        redirectParams,
+      );
+    }
+
+    await this.userService.updateLastPasswordResetRequest(user);
+  }
+
+  async finishCreatingUser(
+    userPk: number,
+    redirectUrl: string,
+    channelSlug: string,
+    contextData: any,
+  ): Promise<void> {
+    if (!userPk) {
+      return;
+    }
+
+    const user = await this.userService.findUserById(userPk);
+    user.searchDocument = this.searchService.prepareUserSearchDocumentValue(
+      user,
+      false,
+    );
+    await this.userService.updateUserSearchDocument(user);
+
+    const manager = await this.pluginManagerService.getPluginManager(
+      contextData,
+    );
+    const site = await this.siteService.getSite(contextData);
+
+    if (site.settings.enableAccountConfirmationByEmail) {
+      const token = this.tokenService.makeToken(user);
+
+      await this.notificationsService.sendAccountConfirmation(
+        user,
+        redirectUrl,
+        channelSlug,
+        manager,
+        token,
+      );
+
+      let preparedRedirectUrl = redirectUrl;
+      if (redirectUrl) {
+        preparedRedirectUrl = this.prepareRedirectUrl(user, redirectUrl, token);
+      }
+
+      await this.eventsService.callEvent(
+        manager.accountConfirmationRequested,
+        user,
+        channelSlug,
+        token,
+        preparedRedirectUrl,
+      );
+    }
+
+    await this.eventsService.callEvent(manager.customerCreated, user);
+    await this.eventsService.customerAccountCreatedEvent(user);
+  }
+
+  private prepareRedirectUrl(user: User, redirectUrl: string, token: string): string {
+    const params = new URLSearchParams({
+      email: user.email,
+      token: token,
+    });
+    const url = new URL(redirectUrl);
+    url.search = params.toString();
+    return url.toString();
+  }
+}
+
+
+// --- saleor/app/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common;
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { ValidationError } from 'class-validator';
+import { AppInstallation } from './entities/app-installation.entity';
+import { App } from './entities/app.entity';
+import { AppToken } from './entities/app-token.entity';
+import { AppExtension } from './entities/app-extension.entity';
+import { Webhook } from './entities/webhook.entity';
+import { EventDelivery } from './entities/event-delivery.entity';
+import { EventDeliveryAttempt } from './entities/event-delivery-attempt.entity';
+import { EventPayload } from './entities/event-payload.entity';
+import { JobStatus } from '../core/job-status';
+import { installApp, AppInstallationError } from './installation-utils';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import { AxiosError } from 'axios';
+
+
+@Injectable()
+export class AppTasks {
+  private readonly logger = new Logger(AppTasks.name);
+
+  constructor(
+    @InjectQueue('app-installation') private installQueue: Queue,
+    @InjectQueue('app-removal') private removalQueue: Queue,
+    private configService: ConfigService,
+    private readonly httpService: HttpService,
+  ) {}
+
+  async addInstallAppTask(jobId: number, activate = false) {
+    await this.installQueue.add('install-app', { jobId, activate });
+  }
+
+  async addRemoveAppsTask() {
+    await this.removalQueue.add('remove-apps', {});
+  }
+
+  async installAppTask(jobId: number, activate: boolean) {
+    try {
+      const appInstallation = await AppInstallation.findOneBy({ id: jobId });
+      if (!appInstallation) {
+        this.logger.warn(
+          `Failed to install app. AppInstallation not found for job_id: ${jobId}.`,
+        );
+        return;
+      }
+
+      const [app, _] = await installApp(appInstallation, activate);
+      await appInstallation.remove();
+      app.isInstalled = true;
+      await app.save();
+      return;
+    } catch (e: any) {
+      let message: string;
+
+      if (e instanceof ValidationError) {\n          message = Object.entries(e.constraints)
+          .map(([property, error]) => `${property}: ${error}`)
+          .join(', ');
+      } else if (e instanceof AppInstallationError) {
+        this.logger.warn(`Failed to install app. Error: ${e}`);
+        message = e.message;
+      } else if (e instanceof AxiosError) {
+        this.logger.warn(
+          'Failed to install app. Response structure incorrect: missing error field.' +
+            ` Error: ${e}`,
+        );
+        message = `App internal error (${e.response?.status}). Try later or contact with app support.`;
+      } else if (e instanceof Error) {
+        this.logger.warn(`Failed to install app. Error: ${e}`);
+        message = 'Failed to connect to app. Try later or contact with app support.';
+      } else {
+        this.logger.error('Failed to install app. Error: %s', e);
+        message = 'Unknown error. Contact with app support.';
+      }
+
+      //appInstallation.message = message;
+      appInstallation.status = JobStatus.FAILED;
+      await appInstallation.save();
+    }
+  }
+
+  private async rawRemoveDeliveries(deliveriesIds: number[]) {
+    const deliveries = await EventDelivery.findBy({ id: deliveriesIds });
+
+    const payloadsIds = (await EventPayload.find({
+      where: {
+        id: deliveries.map((delivery) => delivery.payloadId) as any,
+      },
+    })).map(payload => payload.id);
+
+    const payloads = await EventPayload.findBy({ id: payloadsIds });
+
+    const attempts = await EventDeliveryAttempt.find({
+      where: {
+        deliveryId: deliveries.map((delivery) => delivery.id) as any,
+      },
+    });
+
+    const filesToDelete = payloads
+      .filter((eventPayload) => eventPayload.payloadFile)
+      .map((eventPayload) => eventPayload.payloadFile);
+
+    // Assuming you have a service to handle file deletion
+    // await this.fileStorageService.deleteFiles(filesToDelete);
+
+    await Promise.all(attempts.map(attempt => attempt.remove()));
+    await Promise.all(deliveries.map(delivery => delivery.remove()));
+    await Promise.all(payloads.map(payload => payload.remove()));
+  }
+
+  async removeAppsTask() {
+    const appDeletePeriod = new Date(Date.now() - this.configService.get('DELETE_APP_TTL'));
+    const apps = await App.find({
+      where: {
+        removedAt: LessThanOrEqual(appDeletePeriod),
+      },
+    });
+
+    for (const app of apps) {
+      const webhooks = await Webhook.findBy({ appId: app.id });
+
+      const batchSize = 1000;
+      let lastId = 0;
+
+      while (true) {
+        const deliveriesIds = (await EventDelivery.find({
+          where: {
+            id: MoreThan(lastId),
+            webhookId: In(webhooks.map(webhook => webhook.id)),
+          },
+          order: {
+            id: 'ASC',
+          },
+          take: batchSize,
+        })).map(delivery => delivery.id);
+
+        if (!deliveriesIds.length) {
+          break;
+        }
+
+        lastId = deliveriesIds[deliveriesIds.length - 1];
+
+        await this.rawRemoveDeliveries(deliveriesIds);
+      }
+
+      await Promise.all(webhooks.map(webhook => webhook.remove()));
+      await AppToken.delete({ appId: app.id });
+      await AppExtension.delete({ appId: app.id });
+      await app.remove();
+    }
+  }
+}
+
+import { Process, Processor } from '@nestjs/bullmq';
+import { Job } from 'bullmq';
+import { AppTasks } from './app.tasks';
+
+@Processor('app-installation')
+export class AppInstallProcessor {
+  constructor(private readonly appTasks: AppTasks) {}
+
+  @Process('install-app')
+  async handleInstallApp(job: Job<{ jobId: number; activate: boolean }>) {
+    const { jobId, activate } = job.data;
+    await this.appTasks.installAppTask(jobId, activate);
+  }
+}
+
+@Processor('app-removal')
+export class AppRemovalProcessor {
+  constructor(private readonly appTasks: AppTasks) {}
+
+  @Process('remove-apps')
+  async handleRemoveApps() {
+    await this.appTasks.removeAppsTask();
+  }
+}
+
+import { LessThanOrEqual, MoreThan, In } from 'typeorm';
+
+
+// --- saleor/checkout/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { Decimal } from 'decimal.js';
+
+import { UserService } from '../account/user.service';
+import { AppService } from '../app/app.service';
+import { PaymentService } from '../payment/payment.service';
+import { PluginManager } from '../plugins/plugin-manager';
+import { CompleteCheckoutService } from './complete-checkout.service';
+import { FetchCheckoutInfoService } from './fetch-checkout-info.service';
+import { Checkout, CheckoutLine } from './entities';
+import { CheckoutService } from './checkout.service';
+import { DeleteCheckoutsService } from './delete-checkouts.service';
+import { GraphqlNodeService } from '../graphql/graphql-node.service';
+
+interface DeleteExpiredCheckoutsResult {
+  deletedCount: number;
+  hasMore: boolean;
+}
+
+@Injectable()
+export class CheckoutTasksService {
+  private readonly logger = new Logger(CheckoutTasksService.name);
+
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectQueue('delete_expired_checkouts')
+    private readonly deleteExpiredCheckoutsQueue: Queue,
+    @InjectQueue('automatic_checkout_completion')
+    private readonly automaticCheckoutCompletionQueue: Queue,
+    private readonly userService: UserService,
+    private readonly appService: AppService,
+    private readonly paymentService: PaymentService,
+    private readonly pluginManager: PluginManager,
+    private readonly completeCheckoutService: CompleteCheckoutService,
+    private readonly fetchCheckoutInfoService: FetchCheckoutInfoService,
+    private readonly checkoutService: CheckoutService,
+    private readonly deleteCheckoutsService: DeleteCheckoutsService,
+    private readonly graphqlNodeService: GraphqlNodeService,
+  ) {}
+
+  async deleteExpiredCheckouts(
+    batchSize: number = 2000,
+    batchCount: number = 5,
+    invocationCount: number = 1,
+    invocationLimit: number = 500,
+  ): Promise<DeleteExpiredCheckoutsResult> {
+    const now = new Date();
+
+    const anonymousCheckoutsTimedelta = this.configService.get<number>('ANONYMOUS_CHECKOUTS_TIMEDELTA');
+    const userCheckoutsTimedelta = this.configService.get<number>('USER_CHECKOUTS_TIMEDELTA');
+    const emptyCheckoutsTimedelta = this.configService.get<number>('EMPTY_CHECKOUTS_TIMEDELTA');
+
+    const expiredAnonymousCheckoutsQuery = {
+      lastChange: { $lt: new Date(now.getTime() - anonymousCheckoutsTimedelta) },
+      email: { $eq: null },
+      user: { $eq: null },
+    };
+
+    const expiredUserCheckoutQuery = {
+      lastChange: { $lt: new Date(now.getTime() - userCheckoutsTimedelta) },
+      $or: [{ email: { $ne: null } }, { user: { $ne: null } }],
+    };
+
+    const emptyCheckoutsQuery = {
+      lastChange: { $lt: new Date(now.getTime() - emptyCheckoutsTimedelta) },
+      lines: { $size: 0 },
+    };
+
+    const withTransactions = {
+      $and: [
+        { checkout: { $exists: true } },
+        {
+          $or: [
+            { 'authorizedValue': { $gt: new Decimal(0) } },
+            { 'authorizePendingValue': { $gt: new Decimal(0) } },
+            { 'chargedValue': { $gt: new Decimal(0) } },
+            { 'chargePendingValue': { $gt: new Decimal(0) } },
+            { 'refundPendingValue': { $gt: new Decimal(0) } },
+            { 'cancelPendingValue': { $gt: new Decimal(0) } },
+          ],
+        },
+      ],
+    };
+
+    let totalDeleted = 0;
+    let hasMore = true;
+
+    for (let batchNumber = 0; batchNumber < batchCount; batchNumber++) {
+      const checkouts = await this.checkoutService.find(
+        {
+          $or: [
+            expiredAnonymousCheckoutsQuery,
+            expiredUserCheckoutQuery,
+            emptyCheckoutsQuery,
+          ],
+          transactions: { $not: { $elemMatch: withTransactions } },
+        },
+        batchSize,
+      );
+
+      const checkoutIds = checkouts.map((checkout) => checkout._id);
+      const deletedCount = await this.deleteCheckoutsService.deleteCheckouts(checkoutIds);
+      totalDeleted += deletedCount;
+
+      if (deletedCount < batchSize) {
+        hasMore = false;
+        break;
+      }
+    }
+
+    if (totalDeleted > 0) {
+      this.logger.debug(`Deleted ${totalDeleted} checkouts.`);
+    }
+
+    if (hasMore) {
+      if (invocationCount < invocationLimit) {
+        await this.deleteExpiredCheckoutsQueue.add(
+          'deleteExpiredCheckouts',
+          {
+            batchSize,
+            batchCount,
+            invocationCount: invocationCount + 1,
+            invocationLimit,
+          },
+          { delay: 0 },
+        );
+      } else {
+        this.logger.warn('Invocation limit reached, aborting task');
+      }
+    }
+
+    return { deletedCount: totalDeleted, hasMore };
+  }
+
+  async automaticCheckoutCompletionTask(
+    checkoutPk: string,
+    userId: string,
+    appId: string,
+  ): Promise<void> {
+    const checkoutId = this.graphqlNodeService.toGlobalId('Checkout', checkoutPk);
+
+    let checkout: Checkout;
+    try {
+      checkout = await this.checkoutService.findOne(checkoutPk);
+    } catch (e) {
+      this.logger.error(`Checkout with id ${checkoutPk} not found`);
+      return;
+    }
+
+    const user = await this.userService.findOne(userId);
+    const app = await this.appService.findOne(appId);
+
+    const lines = await this.checkoutService.getCheckoutLines(checkout);
+
+    const unavailableVariantPks = await this.checkoutService.getUnavailableVariants(checkout);
+
+    const checkoutInfo = await this.fetchCheckoutInfoService.fetchCheckoutInfo(
+      checkout,
+      lines,
+      this.pluginManager,
+    );
+
+    if (unavailableVariantPks.length > 0) {
+      const notAvailableVariantsIds = unavailableVariantPks.map((pk) =>
+        this.graphqlNodeService.toGlobalId('ProductVariant', pk),
+      );
+      this.logger.info(
+        `The automatic checkout completion not triggered, as the checkout ${checkoutId} contains unavailable variants: ${notAvailableVariantsIds.join( ", ")}.`,
+        {
+          checkout_id: checkoutId,
+          variant_ids: notAvailableVariantsIds,
+        },
+      );
+      return;
+    }
+
+    this.logger.info(
+      `Automatic checkout completion triggered for checkout: ${checkoutId}.`,
+      { checkout_id: checkoutId },
+    );
+
+    const failedErrorMsg = `Automatic checkout completion failed for checkout: ${checkoutId}.`;
+    try {
+      await this.completeCheckoutService.completeCheckout(
+        this.pluginManager,
+        checkoutInfo,
+        lines,
+        {},
+        false,
+        user,
+        app,
+        true,
+      );
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        this.logger.warn(failedErrorMsg, {
+          checkout_id: checkoutId,
+          error: error.message,
+        });
+      } else {
+        const checkoutExists = await this.checkoutService.exists(checkoutPk);
+        let errorMessage = failedErrorMsg;
+
+        if (!checkoutExists) {
+          errorMessage += ' The checkout no longer exists.';
+        }
+
+        this.logger.warn(errorMessage, {
+          checkout_id: checkoutId,
+          error: error.message,
+        });
+        if (checkoutExists) {
+          this.logger.info(
+            `Retrying automatic checkout completion for checkout: ${checkoutId}.`,
+            { checkout_id: checkoutId },
+          );
+          // await this.automaticCheckoutCompletionQueue.add(
+          //   'automaticCheckoutCompletion',
+          //   {
+          //     checkoutPk,
+          //     userId,
+          //     appId,
+          //   },
+          //   {
+          //     delay: 60000,
+          //     attempts: 5,
+          //   },
+          // );
+        }
+      }
+    } finally {
+      this.logger.info(
+        `Automatic checkout completion succeeded for checkout: ${checkoutId}.`,
+        { checkout_id: checkoutId },
+      );
+    }
+  }
+}
+
+
+// --- saleor/core/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Queue } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { EventDelivery, EventPayload } from './entities/event.entity';
+import { Storage } from '@google-cloud/storage';
+
+
+interface EventPayloadDeleteJob {expirationDate?: Date;}
+interface DeleteFilesJob {paths: string[];}
+
+@Injectable()
+export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+  private readonly BATCH_SIZE = 1000;
+  private readonly storage: Storage;
+
+  constructor(
+    private readonly configService: ConfigService,
+    @InjectQueue('event-payload-deletion') private eventPayloadDeletionQueue: Queue<EventPayloadDeleteJob>,
+    @InjectQueue('storage-deletion') private storageDeletionQueue: Queue<DeleteFilesJob>,
+    @InjectQueue('private-storage-deletion') private privateStorageDeletionQueue: Queue<DeleteFilesJob>,
+  ) {
+    this.storage = new Storage();
+  }
+
+  async deleteFromStorageTask(path: string): Promise<void> {
+    try {
+      await this.storage.bucket(this.configService.get<string>('GCLOUD_STORAGE_BUCKET')).file(path).delete();
+      this.logger.log(`File ${path} deleted from storage.`);
+    } catch (error) {
+      this.logger.error(`Error deleting file ${path} from storage:`, error);
+    }
+  }
+
+  async deleteEventPayloadsTask(job: EventPayloadDeleteJob): Promise<void> {
+    const expirationDate = job.expirationDate || new Date(Date.now() + this.configService.get<number>('EVENT_PAYLOAD_DELETE_TASK_TIME_LIMIT'));
+    const deletePeriod = new Date(Date.now() - this.configService.get<number>('EVENT_PAYLOAD_DELETE_PERIOD'));
+
+    const validDeliveries = await EventDelivery.find({
+      where: { createdAt: { $gt: deletePeriod } },
+    });
+
+    const validDeliveryIds = validDeliveries.map(delivery => delivery.payloadId);
+
+    const payloadsToDelete = await EventPayload.createQueryBuilder('event_payload')
+      .where('NOT event_payload.id IN (:...validDeliveryIds)', { validDeliveryIds: validDeliveryIds.length > 0 ? validDeliveryIds : [null] })
+      .orderBy('event_payload.id', 'DESC')
+      .limit(this.BATCH_SIZE)
+      .getMany();
+
+    const ids = payloadsToDelete.map(payload => payload.id);
+
+    if (ids.length > 0) {
+      if (expirationDate > new Date()) {
+        const payloads = await EventPayload.find({
+          where: { id: { $in: ids } },
+        });
+
+        const filesToDelete = payloads
+          .filter(payload => payload.payloadFile)
+          .map(payload => payload.payloadFile);
+
+        await EventPayload.remove(payloads);
+
+        await this.privateStorageDeletionQueue.add('delete-private-files', {paths: filesToDelete});
+        await this.eventPayloadDeletionQueue.add('delete-event-payloads', {expirationDate}, {delay: 5000});
+      } else {
+        this.logger.error('Task invocation time limit reached, aborting task');
+      }
+    }
+  }
+
+  async deleteFilesFromStorageTask(job: DeleteFilesJob): Promise<void> {
+    for (const path of job.paths) {
+      try {
+        await this.storage.bucket(this.configService.get<string>('GCLOUD_STORAGE_BUCKET')).file(path).delete();
+        this.logger.log(`File ${path} deleted from storage.`);
+      } catch (error) {
+        this.logger.error(`Error deleting file ${path} from storage:`, error);
+      }
+    }
+  }
+
+  async deleteFilesFromPrivateStorageTask(job: DeleteFilesJob): Promise<void> {
+    for (const path of job.paths) {
+      // Assuming private_storage is handled by a separate service/library
+      // Replace this with the actual logic to delete from private storage
+      this.logger.log(`Deleting ${path} from private storage (Placeholder)`);
+    }
+  }
+}
+
+
+// --- saleor/csv/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common;
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+
+@Injectable()
+export class ExportTasks {
+  private readonly logger = new Logger(ExportTasks.name);
+  private TASK_NAME_TO_DATA_TYPE_MAPPING = {
+    'export-products': 'products',
+    'export-gift-cards': 'gift cards',
+    'export-voucher-codes': 'voucher codes',
+  };
+
+  constructor(
+    @InjectQueue('export-products') private exportProductsQueue: Queue,
+    @InjectQueue('export-gift-cards') private exportGiftCardsQueue: Queue,
+    @InjectQueue('export-voucher-codes') private exportVoucherCodesQueue: Queue,
+    @InjectQueue('delete-old-export-files')
+    private deleteOldExportFilesQueue: Queue,
+  ) {}
+
+  async addExportProductsJob(
+    exportFileId: number,
+    scope: Record<string, any>,
+    exportInfo: Record<string, string[]>,
+    fileType: string,
+    delimiter = ',',
+  ) {
+    await this.exportProductsQueue.add(
+      'export-products', // Job name
+      {
+        exportFileId,
+        scope,
+        exportInfo,
+        fileType,
+        delimiter,
+      },
+      { removeOnComplete: true, removeOnFail: true },
+    );
+  }
+
+  async addExportGiftCardsJob(
+    exportFileId: number,
+    scope: Record<string, any>,
+    fileType: string,
+    delimiter = ',',
+  ) {
+    await this.exportGiftCardsQueue.add(
+      'export-gift-cards', // Job name
+      {
+        exportFileId,
+        scope,
+        fileType,
+        delimiter,
+      },
+      { removeOnComplete: true, removeOnFail: true },
+    );
+  }
+
+  async addExportVoucherCodesJob(
+    exportFileId: number,
+    fileType: string,
+    voucherId: number | null,
+    ids: number[],
+  ) {
+    await this.exportVoucherCodesQueue.add(
+      'export-voucher-codes', // Job name
+      {
+        exportFileId,
+        fileType,
+        voucherId,
+        ids,
+      },
+      { removeOnComplete: true, removeOnFail: true },
+    );
+  }
+
+  async addDeleteOldExportFilesJob() {
+    await this.deleteOldExportFilesQueue.add(
+      'delete-old-export-files', // Job name
+      {},
+      { removeOnComplete: true, removeOnFail: true },
+    );
+  }
+
+  async onExportProductsFailed(jobId: string, error: Error) {
+    this.logger.error(`Job ${jobId} failed with error: ${error.message}`);
+    // Implement logic to handle export product failure
+    // Potentially update database, send notifications, etc.
+  }
+
+  async onExportGiftCardsFailed(jobId: string, error: Error) {
+    this.logger.error(`Job ${jobId} failed with error: ${error.message}`);
+    // Implement logic to handle export gift cards failure
+  }
+
+  async onExportVoucherCodesFailed(jobId: string, error: Error) {
+    this.logger.error(`Job ${jobId} failed with error: ${error.message}`);
+    // Implement logic to handle export voucher codes failure
+  }
+
+  async onDeleteOldExportFilesFailed(jobId: string, error: Error) {
+    this.logger.error(`Job ${jobId} failed with error: ${error.message}`);
+    // Implement logic to handle delete old export files failure
+  }
+}
+
+
+// --- saleor/discount/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { DateTime } from 'luxon';
+
+@Injectable()
+export class PromotionTasks {
+  private readonly logger = new Logger(PromotionTasks.name);
+  private readonly promotionToggleBatchSize = 100;
+  private readonly expiredRulesBatchSize = 5000;
+  private readonly voucherCodeBatchSize = 1000;
+
+  constructor(
+    @InjectQueue('promotion-toggle') private promotionToggleQueue: Queue,
+    @InjectQueue('clear-promotion-rules') private clearPromotionRulesQueue: Queue,
+    @InjectQueue('voucher-codes') private voucherCodesQueue: Queue,
+    @InjectQueue('discounted-prices') private discountedPricesQueue: Queue,
+    @InjectQueue('promotion-rule-variants')
+    private promotionRuleVariantsQueue: Queue,
+  ) {}
+
+  async handlePromotionToggle() {
+    try {
+      // TODO: Implement get_starting_promotions and get_ending_promotions
+      // to fetch promotions ready to start/end.
+      // const startingPromotions = await this.getStartingPromotions(true);
+      // const endingPromotions = await this.getEndingPromotions(true);
+
+      // const promotionIds = [...new Set([
+      //   ...startingPromotions.map(p => p.id),
+      //   ...endingPromotions.map(p => p.id)
+      // ])].slice(0, this.promotionToggleBatchSize);
+
+      // TODO: Fetch Promotions from DB by Ids
+      // const promotions = await this.promotionService.findByIds(promotionIds);
+
+      // TODO: Implement fetch_promotion_variants_and_product_ids
+      // const { promotionIdToVariants, productIds } = await
+      // this.fetchPromotionVariantsAndProductIds(promotions);
+
+      // TODO: Implement plugin manager and webhooks
+      // for (const startingPromo of startingPromotions) {
+      //   await this.pluginsManager.promotionStarted(startingPromo, webhooks);
+      // }
+
+      // TODO: Clear promotion rule variants
+      // await this.clearPromotionRulesQueue.add('clearPromotionRuleVariants', {});
+
+      // TODO: Mark catalogue promotion rules as dirty
+      // await this.markCataloguePromotionRulesAsDirty(
+      //   promotions.map(p => p.id)
+      // );
+
+      // TODO: Update promotion last notification scheduled at
+      // await this.promotionService.update({
+      //   lastNotificationScheduledAt: DateTime.utc().toJSDate(),
+      // }, { where: { id: In(promotionIds) } });
+
+      this.logger.info(
+        'The handlePromotionToggle task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in handlePromotionToggle task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async clearPromotionRuleVariantsTask() {
+    try {
+      // TODO: Implement the logic to clear promotion rule variants
+      // based on expired promotions.
+
+      this.logger.info(
+        'The clearPromotionRuleVariantsTask task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in clearPromotionRuleVariantsTask task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async decreaseVoucherCodeUsageOfDraftOrders(channelId: number) {
+    try {
+      // TODO: Implement logic to fetch voucher codes associated with draft orders
+      // and enqueue the task to decrease their usage.
+
+      this.logger.info(
+        'The decreaseVoucherCodeUsageOfDraftOrders task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in decreaseVoucherCodeUsageOfDraftOrders task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async decreaseVoucherCodesUsageTask(voucherCodeIds: number[], codes: string[]) {
+    try {
+      // TODO: Implement logic to decrease voucher code usage in batch.
+
+      this.logger.info(
+        'The decreaseVoucherCodesUsageTask task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in decreaseVoucherCodesUsageTask task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async disconnectVoucherCodesFromDraftOrders(channelId: number) {
+    try {
+      // TODO: Implement logic to disconnect voucher codes from draft orders
+
+      this.logger.info(
+        'The disconnectVoucherCodesFromDraftOrders task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in disconnectVoucherCodesFromDraftOrders task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async disconnectVoucherCodesFromDraftOrdersTask(orderIds: number[]) {
+    try {
+      // TODO: Implement logic to disconnect voucher codes from draft orders in batch.
+
+      this.logger.info(
+        'The disconnectVoucherCodesFromDraftOrdersTask task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in disconnectVoucherCodesFromDraftOrdersTask task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async updateDiscountedPricesTask() {
+    try {
+      // TODO: Implement logic to update discounted prices
+
+      this.logger.info(
+        'The updateDiscountedPricesTask task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in updateDiscountedPricesTask task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+
+  async setPromotionRuleVariantsTask(startId?: number) {
+    try {
+      // TODO: Implement logic to set promotion rule variants
+
+      this.logger.info(
+        'The setPromotionRuleVariantsTask task completed (implementation pending).',
+      );
+    } catch (error) {
+      this.logger.error(
+        'Error in setPromotionRuleVariantsTask task: %s', error.message, error.stack
+      );
+      throw error;
+    }
+  }
+}
+
+
+// --- saleor/giftcard/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { GiftCard } from './gift-card.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { giftCardsDeactivatedEvent } from './events/gift-cards-deactivated.event';
+import { updateGiftCardsSearchVector } from './search/update-gift-cards-search-vector';
+
+const GIFT_CARD_BATCH_SIZE = 300;
+
+@Injectable()
+export class GiftCardTasks {
+  private readonly logger = new Logger(GiftCardTasks.name);
+
+  constructor(
+    @InjectRepository(GiftCard) private giftCardRepository: Repository<GiftCard>,
+    @InjectQueue('deactivate-expired-cards') private deactivateExpiredCardsQueue: Queue,
+    @InjectQueue('update-search-vector') private updateSearchVectorQueue: Queue,
+  ) {}
+
+  async deactivateExpiredCardsTask() {
+    const today = new Date();
+
+    const giftCards = await this.giftCardRepository.find({
+      where: {
+        expiryDate: LessThan(today),
+        isActive: true,
+      },
+    });
+
+    if (!giftCards || giftCards.length === 0) {
+      return;
+    }
+
+    const giftCardIds = giftCards.map((card) => card.id);
+
+    await this.giftCardRepository.update(
+      {
+        id: In(giftCardIds),
+      },
+      {
+        isActive: false,
+      },
+    );
+
+    giftCardsDeactivatedEvent(giftCardIds, null, null);
+
+    this.logger.debug(`Deactivated ${giftCardIds.length} gift cards`);
+  }
+
+  async updateGiftCardsSearchVectorTask() {
+    const giftCards = await this.giftCardRepository.find({
+      where: {
+        searchIndexDirty: true,
+      },
+      take: GIFT_CARD_BATCH_SIZE,
+    });
+
+    if (!giftCards || giftCards.length === 0) {
+      return;
+    }
+
+    await updateGiftCardsSearchVector(giftCards);
+  }
+}
+
+
+// --- saleor/order/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+// import { settings } from './config/settings'; // Assuming you have a settings/config file
+// import { allowWriter } from './decorators/allow-writer.decorator'; // Assuming you have a custom decorator
+import { Order } from './entities/order.entity';
+import { OrderEvent } from './entities/order-event.entity';
+import { Channel } from './entities/channel.entity';
+import { Voucher } from './entities/voucher.entity';
+import { VoucherCode } from './entities/voucher-code.entity';
+import { VoucherCustomer } from './entities/voucher-customer.entity';
+import { Payment } from './entities/payment.entity';
+import { TransactionItem } from './entities/transaction-item.entity';
+import { User } from './entities/user.entity';
+// import { getPluginsManager } from './plugins/plugins.manager'; // Assuming you have a plugins manager
+// import { deallocateStockForOrders } from './warehouse/warehouse.management'; // Assuming you have warehouse management functions
+// import { WebhookEventAsyncType, WebhookEventSyncType } from './webhooks/webhook-event-types'; // Assuming you have webhook event types
+// import { getWebhooksForMultipleEvents } from './webhooks/webhook.utils'; // Assuming you have webhook utilities
+import { OrderEvents, OrderStatus } from './enums/order.enum';
+// import { callOrderEvent, callOrderEvents } from './order.actions'; // Assuming you have functions to call order events
+// import { invalidateOrderPrices } from './order.utils'; // Assuming you have functions to invalidate order prices
+
+const EXPIRE_ORDER_BATCH_SIZE = 100;
+const DELETE_EXPIRED_ORDER_BATCH_SIZE = 5000;
+
+@Injectable()
+export class OrderTasksService {
+  private readonly logger = new Logger(OrderTasksService.name);
+
+  constructor(
+    @InjectQueue('recalculate-orders') private readonly recalculateOrdersQueue: Queue,
+    @InjectQueue('send-order-updated') private readonly sendOrderUpdatedQueue: Queue,
+    @InjectQueue('expire-orders') private readonly expireOrdersQueue: Queue,
+    @InjectQueue('delete-expired-orders') private readonly deleteExpiredOrdersQueue: Queue,
+    @InjectRepository(Order) private orderRepository: Repository<Order>,
+    @InjectRepository(OrderEvent) private orderEventRepository: Repository<OrderEvent>,
+    @InjectRepository(Channel) private channelRepository: Repository<Channel>,
+    @InjectRepository(Voucher) private voucherRepository: Repository<Voucher>,
+    @InjectRepository(VoucherCode) private voucherCodeRepository: Repository<VoucherCode>,
+    @InjectRepository(VoucherCustomer) private voucherCustomerRepository: Repository<VoucherCustomer>,
+    @InjectRepository(Payment) private paymentRepository: Repository<Payment>,
+    @InjectRepository(TransactionItem) private transactionItemRepository: Repository<TransactionItem>,
+    @InjectRepository(User) private userRepository: Repository<User>,
+  ) {}
+
+  async recalculateOrdersTask(orderIds: number[]) {
+    const orders = await this.orderRepository.find({ where: { id: In(orderIds) } });
+
+    for (const order of orders) {
+      // invalidateOrderPrices(order);
+      console.log("invalidateOrderPrices function here ")
+    }
+
+    await this.orderRepository.save(orders);
+  }
+
+  async sendOrderUpdated(orderIds: number[]) {
+    // const manager = getPluginsManager(allow_replica=True);
+    // const webhook_event_map = getWebhooksForMultipleEvents([
+    //     WebhookEventAsyncType.ORDER_UPDATED,
+    //     ...WebhookEventSyncType.ORDER_EVENTS,
+    // ]);
+
+    const orders = await this.orderRepository.find({ where: { id: In(orderIds) } });
+
+    for (const order of orders) {\n         console.log("call_order_event function here ")
+      // call_order_event(
+      //     manager,
+      //     WebhookEventAsyncType.ORDER_UPDATED,
+      //     order,
+      //     webhook_event_map=webhook_event_map,
+      // );
+    }
+  }
+
+  private async _bulkReleaseVoucherUsage(orderIds: number[]) {
+    //This implementation assume that OuterRef and Subquery does not exit in TypeORM
+    //It will take performance hit because of fetching to memory
+
+    const orders = await this.orderRepository.find({ where: { id: In(orderIds) } });
+
+    for (const order of orders) {
+
+        if (order.voucherCode != null) {
+
+             const voucher_customer = await this.voucherCustomerRepository.findOne({
+                    where: {
+                      voucher_code_id: order.voucherCode.id,
+                      customer_email: order.userEmail
+                    }
+              })
+
+             if (voucher_customer != null) {
+                await this.voucherCustomerRepository.remove(voucher_customer)
+             }
+        }
+    }
+
+  }
+
+  private async _callExpiredOrderEvents(orderIds: number[]) {
+    // const manager = getPluginsManager(allow_replica=True);
+    // const webhook_event_map = getWebhooksForMultipleEvents([
+    //     WebhookEventAsyncType.ORDER_EXPIRED,
+    //     WebhookEventAsyncType.ORDER_UPDATED,
+    //     ...WebhookEventSyncType.ORDER_EVENTS,
+    // ]);
+
+    const orders = await this.orderRepository.find({ where: { id: In(orderIds) }, relations: ['channel'] });
+
+    for (const order of orders) {
+        console.log("call_order_events function here ")
+      // call_order_events(
+      //     manager,
+      //     [WebhookEventAsyncType.ORDER_EXPIRED, WebhookEventAsyncType.ORDER_UPDATED],
+      //     order,
+      //     webhook_event_map=webhook_event_map,
+      // );
+    }
+  }
+
+  private async _orderExpiredEvents(orderIds: number[]) {
+    const orderEvents: OrderEvent[] = orderIds.map((orderId) => {
+      const orderEvent = new OrderEvent();
+      orderEvent.orderId = orderId;
+      orderEvent.type = OrderEvents.EXPIRED;
+      return orderEvent;
+    });
+
+    await this.orderEventRepository.save(orderEvents);
+  }
+
+
+  private async _expireOrders(manager: any, now: Date) {
+   // let channels = await this.channelRepository.find({
+   //      where: {
+   //          expire_orders_after: LessThan(now - order.created_at)
+   //      }
+   //  })
+
+
+    const qs = await this.orderRepository.find({
+      where: {
+        transactionItems: IsNull(),
+        payments: IsNull(),
+        status: OrderStatus.UNCONFIRMED,
+        channel: Not(IsNull())
+      },
+      take: EXPIRE_ORDER_BATCH_SIZE,
+    });
+
+    const ids_batch = qs.map((order) => order.id);
+
+      await this.orderRepository.update({ id: In(ids_batch) }, { status: OrderStatus.EXPIRED, expiredAt: now });
+      await this._bulkReleaseVoucherUsage(ids_batch);
+      await this._orderExpiredEvents(ids_batch);
+
+      //Assuming those function exist
+      // deallocateStockForOrders(ids_batch, manager);
+      console.log("deallocateStockForOrders function here ")
+      await this._callExpiredOrderEvents(ids_batch, manager);
+
+  }
+
+  async expireOrdersTask() {
+    const now = new Date();
+    // const manager = getPluginsManager(allow_replica=True);
+    const manager = null
+    await this._expireOrders(manager, now);
+  }
+
+  async deleteExpiredOrdersTask() {
+    const now = new Date();
+
+    // let channel_qs =  await this.channelRepository.find({
+    //      where: {
+    //          delete_expired_orders_after:LessThan(now - order.expired_at)
+    //      }
+    //  })
+
+    // const qs = (
+    //     Order.objects.using(settings.DATABASE_CONNECTION_REPLICA_NAME)
+    //     .annotate(
+    //         delete_expired_orders_after=Subquery(
+    //             channel_qs.values("delete_expired_orders_after")[:1]
+    //         )
+    //     )
+    //     .filter(
+    //         ~Exists(TransactionItem.objects.filter(order=OuterRef("pk"))),
+    //         ~Exists(Payment.objects.filter(order=OuterRef("pk"))),
+    //         expired_at__isnull=False,
+    //         status=OrderStatus.EXPIRED,
+    //         expired_at__lte=now - F("delete_expired_orders_after"),  # type:ignore[operator]
+    //     )
+    // )
+
+
+    const orders = await this.orderRepository.find({
+        where: {
+            transactionItems: IsNull(),
+            payments: IsNull(),
+            expiredAt: Not(IsNull()),
+            status: OrderStatus.EXPIRED,
+            expiredAt: LessThan(now)
+        },
+        take: DELETE_EXPIRED_ORDER_BATCH_SIZE
+    })
+
+    const ids_batch = orders.map(order => order.id)
+
+    if (!ids_batch) {
+      return;
+    }
+
+    const user_orders_count = {}
+
+    const userOrders = await this.orderRepository.find({
+        where: {
+            id: In(ids_batch),
+            user: Not(IsNull())
+        }
+    })
+
+    userOrders.forEach(order => {
+        if(user_orders_count[order.user.id]) {
+            user_orders_count[order.user.id] += 1
+        } else {
+            user_orders_count[order.user.id] = 1
+        }
+    })
+
+    await this.orderRepository.delete({ id: In(ids_batch) });
+
+    await this.reduceUserNumberOfOrders(user_orders_count);
+
+    this.deleteExpiredOrdersQueue.add('deleteExpiredOrders',{}, { delay: 1000 })
+
+  }
+
+  async reduceUserNumberOfOrders(user_orders_count: { [key: number]: number }) {
+    const userIds = Object.keys(user_orders_count).map(Number);
+    const usersToUpdate: User[] = [];
+
+    const users = await this.userRepository.find({ where: { id: In(userIds) } });
+
+    for (const user of users) {
+      const orderCount = user_orders_count[user.id];
+      if (orderCount) {
+        user.numberOfOrders = Math.max(user.numberOfOrders - orderCount, 0);
+        usersToUpdate.push(user);
+      }
+    }
+
+    await this.userRepository.save(usersToUpdate);
+  }
+}
+
+import { Process, Processor } from '@nestjs/bull';
+import { Job } from 'bull';
+import { In, IsNull, LessThan, Not } from 'typeorm';
+
+@Processor('recalculate-orders')
+export class RecalculateOrdersProcessor {
+  private readonly logger = new Logger(RecalculateOrdersProcessor.name);
+
+  constructor(private readonly orderTasksService: OrderTasksService) {}
+
+  @Process('recalculateOrders')
+  async handleRecalculateOrders(job: Job<number[]>) {
+    this.logger.debug('Start recalculating orders...');
+    await this.orderTasksService.recalculateOrdersTask(job.data);
+    this.logger.debug('Done recalculating orders...');
+  }
+}
+
+@Processor('send-order-updated')
+export class SendOrderUpdatedProcessor {
+  private readonly logger = new Logger(SendOrderUpdatedProcessor.name);
+
+  constructor(private readonly orderTasksService: OrderTasksService) {}
+
+  @Process('sendOrderUpdated')
+  async handleSendOrderUpdated(job: Job<number[]>) {
+    this.logger.debug('Start sending order updated...');
+    await this.orderTasksService.sendOrderUpdated(job.data);
+    this.logger.debug('Done sending order updated...');
+  }
+}
+
+@Processor('expire-orders')
+export class ExpireOrdersProcessor {
+  private readonly logger = new Logger(ExpireOrdersProcessor.name);
+
+  constructor(private readonly orderTasksService: OrderTasksService) {}
+
+  @Process('expireOrders')
+  async handleExpireOrders(job: Job<void>) {
+    this.logger.debug('Start expiring orders...');
+    await this.orderTasksService.expireOrdersTask();
+    this.logger.debug('Done expiring orders...');
+  }
+}
+
+
+@Processor('delete-expired-orders')
+export class DeleteExpiredOrdersProcessor {
+  private readonly logger = new Logger(DeleteExpiredOrdersProcessor.name);
+
+  constructor(private readonly orderTasksService: OrderTasksService) {}
+
+  @Process('deleteExpiredOrders')
+  async handleDeleteExpiredOrders(job: Job<void>) {
+    this.logger.debug('Start deleting expired orders...');
+    await this.orderTasksService.deleteExpiredOrdersTask();
+    this.logger.debug('Done deleting expired orders...');
+  }
+}
+
+
+// --- saleor/payment/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { ConfigService } from '@nestjs/config';
+
+@Injectable()
+export class TransactionReleaseFundsService {
+  private readonly logger = new Logger(TransactionReleaseFundsService.name);
+  private readonly transactionBatchSize: number;
+
+  constructor(
+    @InjectQueue('transaction-release-funds')
+    private transactionReleaseFundsQueue: Queue,
+    private configService: ConfigService,
+  ) {
+    this.transactionBatchSize = parseInt(this.configService.get<string>('TRANSACTION_BATCH_FOR_RELEASING_FUNDS') || '100', 10);
+  }
+
+  async addTransactionReleaseFundsJob() {
+    await this.transactionReleaseFundsQueue.add('release-funds', {});
+  }
+
+  async processTransactionReleaseFunds() {
+    this.logger.log('Starting transaction release funds processing...');
+
+    // Implement the logic from transactions_to_release_funds here
+    // This will involve querying the database for eligible transactions
+    // and checkouts.
+    // Due to the lack of context for the database models, I will
+    // leave this section as a placeholder.  You'll need to adapt your
+    // NestJS/TypeORM entities and queries here.
+
+    // Placeholder for fetching transactions
+    const transactions = await this.fetchTransactionsToReleaseFunds();
+
+    if (!transactions || transactions.length === 0) {
+      this.logger.warn('No transactions to release funds.');
+      return;
+    }
+
+    const transactionPks = transactions.map((transaction) => transaction.id);
+    const checkoutIds = transactions.map((transaction) => transaction.checkoutId);
+
+    // Placeholder for fetching checkouts
+    const checkoutsData = await this.fetchCheckoutsData(checkoutIds);
+
+    // Placeholder for fetching channels
+    const checkoutChannelIds = [...new Set(checkoutsData.map(([, channelId]) => channelId))];
+    const channelsInBulk = await this.fetchChannelsInBulk(checkoutChannelIds);
+
+    const checkoutIdToChannel = checkoutsData.reduce((acc, [checkoutId, channelId]) => {
+      acc[checkoutId] = channelsInBulk[channelId];
+      return acc;
+    }, {});
+
+    if (transactionPks.length > 0) {\n        // Placeholder for fetching transactions with related data\n        const transactionsWithRelatedData = await this.fetchTransactionsWithRelatedData(transactionPks);
+
+        const transactionsWithCancelRequestEvents = [];
+        const transactionsWithChargeRequestEvents = [];
+
+        for (const transactionItem of transactionsWithRelatedData) {
+            // If transaction is authorized we need to trigger the cancel event
+            if (transactionItem.authorizedValue) {
+                const event = {
+                    amountValue: transactionItem.authorizedValue,
+                    currency: transactionItem.currency,
+                    type: 'CANCEL_REQUEST', // Assuming you have a TransactionEventType enum
+                    transactionId: transactionItem.id,
+                    idempotencyKey: this.generateUuid(),
+                };
+                transactionsWithCancelRequestEvents.push([transactionItem, event]);
+            }
+
+            // If transaction is charged we need to trigger the refund event
+            if (transactionItem.chargedValue) {
+                const event = {
+                    amountValue: transactionItem.chargedValue,
+                    currency: transactionItem.currency,
+                    type: 'REFUND_REQUEST',
+                    transactionId: transactionItem.id,
+                    idempotencyKey: this.generateUuid(),
+                };
+                transactionsWithChargeRequestEvents.push([transactionItem, event]);
+            }
+        }
+
+        if (transactionsWithChargeRequestEvents.length > 0 || transactionsWithCancelRequestEvents.length > 0) {
+            // Wrap in a transaction using TypeORM's EntityManager or similar
+            // await this.entityManager.transaction(async (transactionalEntityManager) => {
+            //  await transactionalEntityManager.save(TransactionEvent, [...events]);
+            //  await transactionalEntityManager.update(TransactionItem, { id: In(transactionPks) }, { lastRefundSuccess: false });
+            // });
+            this.logger.debug("bulk create & update  events here")
+
+            const manager = { /* get_plugins_manager equivalent, you'll need to adapt this */ };
+
+            for (const [transactionItem, event] of transactionsWithCancelRequestEvents) {
+                const channel = checkoutIdToChannel[transactionItem.checkoutId]; // type: ignore[index]
+                this.logger.info(
+                    `Releasing funds for transaction ${transactionItem.token} - canceling`,
+                    {
+                        transactionId: `TransactionItem:${transactionItem.id}`, //Graphene.Node.to_global_id("TransactionItem", transactionItem.pk)
+                    }
+                );
+                try {
+                    // await request_cancelation_action(
+                    //     event,
+                    //     event.amountValue,
+                    //     'CANCEL',  // TransactionAction.CANCEL,
+                    //     channel.slug,
+                    //     null,
+                    //     null,
+                    //     transactionItem,
+                    //     manager
+                    // );
+                    this.logger.debug("request_cancelation_action")
+                } catch (e) {
+                    this.logger.warn(`Unable to cancel transaction ${transactionItem.token}. ${e}`);
+                }
+            }
+
+            for (const [transactionItem, event] of transactionsWithChargeRequestEvents) {
+                const channel = checkoutIdToChannel[transactionItem.checkoutId]; // type: ignore[index]
+                this.logger.info(
+                    `Releasing funds for transaction ${transactionItem.token} - refunding`,
+                    {
+                        transactionId: `TransactionItem:${transactionItem.id}`,
+                    }
+                );
+                try {
+                    // await request_refund_action(
+                    //     event,
+                    //     event.amountValue,
+                    //     channel.slug,
+                    //     null,
+                    //     null,
+                    //     transactionItem,
+                    //     manager
+                    // );
+                     this.logger.debug("request_refund_action")
+                } catch (e) {
+                    this.logger.warn(`Unable to refund transaction ${transactionItem.token}. ${e}`);
+                }
+            }
+        } else {
+            this.logger.warn('No transactions to release funds.');
+        }
+    }
+  }
+
+  private async fetchTransactionsToReleaseFunds() {
+    // Implement the query logic here, converting Django ORM queries to TypeORM
+    // This is a placeholder, replace with your actual query
+    return [];
+  }
+
+  private async fetchCheckoutsData(checkoutIds: string[][]) {
+    // Implement the query logic here, converting Django ORM queries to TypeORM
+    // This is a placeholder, replace with your actual query
+    return [];
+  }
+
+  private async fetchChannelsInBulk(checkoutChannelIds: string[]) {
+    // Implement the query logic here, converting Django ORM queries to TypeORM
+    // This is a placeholder, replace with your actual query
+    return {};
+  }
+
+  private async fetchTransactionsWithRelatedData(transactionPks: string[]) {
+      // Implement the query logic here, converting Django ORM queries to TypeORM
+      // This is a placeholder, replace with your actual query
+      return [];
+  }
+
+  private generateUuid(): string {
+      return require('crypto').randomBytes(16).toString('hex');
+  }
+}
+
+
+
+import { Process, Processor } from '@nestjs/bull';
+import { Job } from 'bull';
+
+@Processor('transaction-release-funds')
+export class TransactionReleaseFundsProcessor {
+  private readonly logger = new Logger(TransactionReleaseFundsProcessor.name);
+
+  constructor(private transactionReleaseFundsService: TransactionReleaseFundsService) {}
+
+  @Process('release-funds')
+  async handleReleaseFunds(job: Job<any>) {
+    this.logger.debug('Start processing release funds...');
+    await this.transactionReleaseFundsService.processTransactionReleaseFunds();
+    this.logger.debug('Completed processing release funds...');
+  }
+}
+
+
+// Dependencies in target:
+// - @nestjs/common
+// - @nestjs/bull
+// - bull
+// - @nestjs/config
+// - @nestjs/typeorm (if using TypeORM for database interactions)
+// - typeorm (if using TypeORM for database interactions)
+// - crypto (for UUID generation) (native node module, does not need to be installed)
+
+// Note: You'll need to adapt the database query logic and model definitions to your
+// specific NestJS/TypeORM setup.  The placeholders are marked clearly.
+
+
+// --- saleor/product/tasks.py ---
+
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+import { ProductType } from '../product-type.entity';
+import { Attribute } from '../attribute.entity';
+import { ProductVariant } from '../product-variant.entity';
+import { Product } from '../product.entity';
+import { ProductChannelListing } from '../product-channel-listing.entity';
+import { Promotion } from '../promotion.entity';
+import { PromotionRule } from '../promotion-rule.entity';
+import { WebhookEventAsyncType } from '../webhook/webhook-event-async-type';
+
+const PRODUCTS_BATCH_SIZE = 300;
+const VARIANTS_UPDATE_BATCH = 500;
+const DISCOUNTED_PRODUCT_BATCH = 2000;
+const PROMOTION_RULE_BATCH_SIZE = 50;
+
+@Injectable()
+export class ProductTasks {
+  private readonly logger = new Logger(ProductTasks.name);
+
+  constructor(
+    @InjectQueue('update-variants-names') private updateVariantsNamesQueue: Queue,
+    @InjectQueue('update-products-discounted-prices-of-promotion') private updateProductsDiscountedPricesOfPromotionQueue: Queue,
+    @InjectQueue('update-variant-relations-for-active-promotion-rules') private updateVariantRelationsForActivePromotionRulesQueue: Queue,
+    @InjectQueue('update-products-discounted-prices-for-promotion') private updateProductsDiscountedPricesForPromotionQueue: Queue,
+    @InjectQueue('recalculate-discounted-price-for-products') private recalculateDiscountedPriceForProductsQueue: Queue,
+    @InjectQueue('update-discounted-prices') private updateDiscountedPricesQueue: Queue,
+    @InjectQueue('deactivate-preorder-for-variants') private deactivatePreorderForVariantsQueue: Queue,
+    @InjectQueue('update-products-search-vector') private updateProductsSearchVectorQueue: Queue,
+    @InjectQueue('collection-product-updated') private collectionProductUpdatedQueue: Queue,
+  ) {}
+
+  async updateVariantsNames(productTypePk: number, savedAttributesIds: number[]) {
+    await this.updateVariantsNamesQueue.add('updateVariantsNames', { productTypePk, savedAttributesIds });
+  }
+
+  async updateProductsDiscountedPricesOfPromotionTask(promotionPk: string) {
+    await this.updateProductsDiscountedPricesOfPromotionQueue.add('updateProductsDiscountedPricesOfPromotionTask', { promotionPk });
+  }
+
+  async updateVariantRelationsForActivePromotionRulesTask() {
+    await this.updateVariantRelationsForActivePromotionRulesQueue.add('updateVariantRelationsForActivePromotionRulesTask', {});
+  }
+
+  async updateProductsDiscountedPricesForPromotionTask(
+    productIds: number[],
+    startId?: string,
+    ruleIds?: string[],
+  ) {
+    await this.updateProductsDiscountedPricesForPromotionQueue.add('updateProductsDiscountedPricesForPromotionTask', { productIds, startId, ruleIds });
+  }
+
+  async recalculateDiscountedPriceForProductsTask() {
+    await this.recalculateDiscountedPriceForProductsQueue.add('recalculateDiscountedPriceForProductsTask', {});
+  }
+
+  async updateDiscountedPricesTask(productIds: number[]) {
+    await this.updateDiscountedPricesQueue.add('updateDiscountedPricesTask', { productIds });
+  }
+
+  async deactivatePreorderForVariantsTask() {
+    await this.deactivatePreorderForVariantsQueue.add('deactivatePreorderForVariantsTask', {});
+  }
+
+  async updateProductsSearchVectorTask() {
+    await this.updateProductsSearchVectorQueue.add('updateProductsSearchVectorTask', {});
+  }
+
+  async collectionProductUpdatedTask(productIds: number[]) {
+    await this.collectionProductUpdatedQueue.add('collectionProductUpdatedTask', { productIds });
+  }
+}
+
+
+
+
+// --- saleor/shipping/tasks.py ---
+
+import { Injectable } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue } from 'bull';
+
+@Injectable()
+export class ShippingMethodCleanupService {
+  constructor(@InjectQueue('shippingMethodCleanup') private readonly shippingMethodCleanupQueue: Queue) {}
+
+  async dropInvalidShippingMethodsRelationsForGivenChannels(
+    shippingMethodIds: (string | number)[],
+    channelIds: (string | number)[],
+  ): Promise<void> {
+    await this.shippingMethodCleanupQueue.add('dropInvalidShippingMethods', {
+      shippingMethodIds,
+      channelIds,
+    });
+  }
+}
+
+// At Processor level
+
+import { Processor, Process } from '@nestjs/bull';
+import { Job } from 'bull';
+// Assuming you have your NestJS entities/models defined
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Checkout } from '../checkout/entities/checkout.entity';
+import { Order } from '../order/entities/order.entity';
+
+// Assuming you have a config service to get ORDER_EDITABLE_STATUS
+import { ConfigService } from '@nestjs/config';
+
+@Processor('shippingMethodCleanup')
+export class ShippingMethodCleanupProcessor {
+  constructor(
+    @InjectRepository(Checkout) private checkoutRepository: Repository<Checkout>,
+    @InjectRepository(Order) private orderRepository: Repository<Order>,
+    private configService: ConfigService,
+  ) {}
+
+  @Process('dropInvalidShippingMethods')
+  async handleDropInvalidShippingMethods(
+    job: Job<{ shippingMethodIds: (string | number)[]; channelIds: (string | number)[] }>,
+  ): Promise<void> {
+    const { shippingMethodIds, channelIds } = job.data;
+    const ORDER_EDITABLE_STATUS = this.configService.get<string[]>('ORDER_EDITABLE_STATUS');
+
+    // Unlink shipping methods from order and checkout instances
+    // when the method is no longer available in given channels
+    await this.checkoutRepository
+      .createQueryBuilder()
+      .update(Checkout)
+      .set({ shippingMethod: null, priceExpiration: new Date(), lastChange: new Date() })
+      .where('shippingMethodId IN (:...shippingMethodIds)', { shippingMethodIds })
+      .andWhere('channelId IN (:...channelIds)', { channelIds })
+      .execute();
+
+    await this.orderRepository
+      .createQueryBuilder()
+      .update(Order)
+      .set({ shippingMethod: null, shouldRefreshPrices: true })
+      .where('status IN (:...ORDER_EDITABLE_STATUS)', { ORDER_EDITABLE_STATUS })
+      .andWhere('shippingMethodId IN (:...shippingMethodIds)', { shippingMethodIds })
+      .andWhere('channelId IN (:...channelIds)', { channelIds })
+      .execute();
+  }
+}
+
+// --- saleor/warehouse/tasks.py ---
+
+import { Injectable } from '@nestjs/common';
+import { Queue } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { DataSource, EntityManager } from 'typeorm';
+
+@Injectable()
+export class StockTasks {
+  private readonly taskLogger = {
+    debug: (message: string, ...args: any[]) => console.debug(message, ...args),
+    info: (message: string, ...args: any[]) => console.info(message, ...args),
+  };
+
+  constructor(
+    @InjectQueue('delete-empty-allocations')
+    private deleteEmptyAllocationsQueue: Queue,
+    @InjectQueue('delete-expired-reservations')
+    private deleteExpiredReservationsQueue: Queue,
+    @InjectQueue('update-stocks-quantity-allocated')
+    private updateStocksQuantityAllocatedQueue: Queue,
+    private dataSource: DataSource,
+  ) {}
+
+  async addDeleteEmptyAllocationsTask() {
+    await this.deleteEmptyAllocationsQueue.add('deleteEmptyAllocations', {});
+  }
+
+  async addDeleteExpiredReservationsTask() {
+    await this.deleteExpiredReservationsQueue.add('deleteExpiredReservations', {});
+  }
+
+  async addUpdateStocksQuantityAllocatedTask() {
+    await this.updateStocksQuantityAllocatedQueue.add('updateStocksQuantityAllocated', {});
+  }
+
+  async deleteEmptyAllocations() {
+    let count = 0;
+    await this.dataSource.transaction(async (entityManager: EntityManager) => {
+      const idsToDelete = await entityManager
+        .createQueryBuilder()
+        .select('id')
+        .from('allocation', 'allocation')
+        .where('allocation.quantity_allocated = :quantity', { quantity: 0 })
+        .getMany();
+
+      if (idsToDelete.length > 0) {
+        const deleteResult = await entityManager
+          .createQueryBuilder()
+          .delete()
+          .from('allocation')
+          .whereInIds(idsToDelete)
+          .execute();
+
+        count = deleteResult.affected || 0;
+      }
+    });
+
+    if (count) {
+      this.taskLogger.debug(`Removed ${count} allocations`);
+    }
+  }
+
+  async deleteExpiredReservations() {
+    let stockReservations = 0;
+    let preorderReservations = 0;
+
+    await this.dataSource.transaction(async (entityManager: EntityManager) => {
+      const stockReservationDeleteResult = await entityManager
+        .createQueryBuilder()
+        .delete()
+        .from('reservation')
+        .where('reserved_until < :now', { now: new Date() })
+        .execute();
+
+      stockReservations = stockReservationDeleteResult.affected || 0;
+
+      const preorderReservationDeleteResult = await entityManager
+        .createQueryBuilder()
+        .delete()
+        .from('preorder_reservation')
+        .where('reserved_until < :now', { now: new Date() })
+        .execute();
+      preorderReservations = preorderReservationDeleteResult.affected || 0;
+    });
+
+    if (stockReservations || preorderReservations) {
+      this.taskLogger.debug(
+        `Removed ${stockReservations} stock reservations and ${preorderReservations} preorder reservations`,
+      );
+    }
+  }
+
+  async updateStocksQuantityAllocated() {
+    const stocksToUpdate = [];
+
+    await this.dataSource.transaction(async (entityManager: EntityManager) => {
+      const mismatchedStocks = await entityManager
+        .createQueryBuilder()
+        .select('stock')
+        .from('stock', 'stock')
+        .leftJoin(
+          'stock.allocations',
+          'allocations',
+          'allocations.stock_id = stock.id',
+        )
+        .groupBy('stock.id')
+        .addGroupBy('stock.quantity_allocated')
+        .addSelect('COALESCE(SUM(allocations.quantity_allocated), 0)', 'allocations_allocated')
+        .having('stock.quantity_allocated <> COALESCE(SUM(allocations.quantity_allocated), 0)')
+        .getRawMany();
+
+      for (const mismatchedStock of mismatchedStocks) {\n          const allocationsAllocated = mismatchedStock.allocations_allocated !== null ? parseFloat(mismatchedStock.allocations_allocated) : 0;
+
+        this.taskLogger.info(
+          `Mismatch updating quantity_allocated: stock ${mismatchedStock.stock_id} had ${mismatchedStock.stock_quantity_allocated} allocated, but should have ${allocationsAllocated}.`,
+        );
+
+        await entityManager
+          .createQueryBuilder()
+          .update('stock')
+          .set({ quantity_allocated: allocationsAllocated })
+          .where('id = :id', { id: mismatchedStock.stock_id })
+          .execute();
+
+        stocksToUpdate.push(mismatchedStock.stock_id);
+      }
+    });
+
+    this.taskLogger.info(
+      `Finished updating quantity_allocated on stocks, ${stocksToUpdate.length} were corrected.`,
+    );
+  }
+}

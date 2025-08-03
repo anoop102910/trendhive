@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model GiftCardTag {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(255)
+  gift_cards GiftCard[]
+
+  @@index([name], name: "gift_card_tag_search_gin", type: Gin)
+  @@map("giftcardtag")
+}
+
+model GiftCard {
+  id                     Int       @id @default(autoincrement())
+  code                   String    @unique @db.VarChar(16)
+  is_active              Boolean   @default(true)
+  created_by_id          Int?      @map("created_by")
+  created_by             User?     @relation(fields: [created_by_id], references: [id], name: "GiftCard_created_by", onDelete: SetNull)
+  used_by_id             Int?      @map("used_by")
+  used_by                User?     @relation(fields: [used_by_id], references: [id], name: "GiftCard_used_by", onDelete: SetNull)
+  created_by_email       String?   @db.Text
+  used_by_email          String?   @db.Text
+  app_id                 Int?      @map("app")
+  app                    App?      @relation(fields: [app_id], references: [id], name: "GiftCard_app", onDelete: SetNull)
+  expiry_date            DateTime? @db.Date
+  tags                   GiftCardTag[]
+  created_at             DateTime  @default(now()) @db.Timestamptz()
+  last_used_on           DateTime? @db.Timestamptz()
+  product_id             Int?      @map("product")
+  product                Product?  @relation(fields: [product_id], references: [id], onDelete: SetNull)
+  fulfillment_line_id  Int? @map("fulfillment_line")
+  fulfillment_line       FulfillmentLine? @relation(fields: [fulfillment_line_id], references: [id], onDelete: SetNull)
+  currency               String    @default("USD") @db.VarChar(3)
+  initial_balance_amount Decimal   @db.Decimal
+  current_balance_amount Decimal   @db.Decimal
+  search_vector          String?   @db.Text
+  search_index_dirty     Boolean   @default(true)
+  events                 GiftCardEvent[]
+  private_metadata       Json      @default("{}")
+  metadata               Json      @default("{}")
+
+  @@index([created_at])
+  @@index([code])
+  @@index([search_vector], name: "giftcard_tsearch", type: Gin)
+  @@map("giftcard")
+}
+
+model GiftCardEvent {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now()) @db.Timestamptz()
+  type        String   @db.VarChar(255)
+  parameters  Json     @default("{}")
+  user_id     Int?     @map("user")
+  user        User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  app_id      Int?     @map("app")
+  app         App?     @relation(fields: [app_id], references: [id], onDelete: SetNull)
+  order_id    Int?     @map("order")
+  order       Order?   @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  gift_card_id Int @map("gift_card")
+  gift_card GiftCard @relation(fields: [gift_card_id], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@map("giftcardevent")
+}
+
+model User {
+  id                  Int              @id @default(autoincrement())
+  GiftCard_created_by GiftCard[]       @relation(name: "GiftCard_created_by")
+  GiftCard_used_by    GiftCard[]       @relation(name: "GiftCard_used_by")
+  gift_card_events    GiftCardEvent[]
+
+  @@map("auth_user")
+}
+
+model App {
+  id              Int             @id @default(autoincrement())
+  GiftCard_app    GiftCard[]      @relation(name: "GiftCard_app")
+  gift_card_events GiftCardEvent[]
+
+  @@map("app_app")
+}
+
+model Product {
+  id        Int        @id @default(autoincrement())
+  gift_cards GiftCard[]
+  @@map("product_product")
+}
+
+model FulfillmentLine {
+  id Int @id @default(autoincrement())
+  gift_cards GiftCard[]
+  @@map("order_fulfillmentline")
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  gift_card_events GiftCardEvent[]
+  @@map("order_order")
+}

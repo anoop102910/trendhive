@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TaxClass {
+  id            Int                    @id @default(autoincrement())
+  name          String
+  countryRates  TaxClassCountryRate[]
+  metadata      Metadata[]             @relation("TaxClassMetadata")
+  privateMetadata PrivateMetadata[]  @relation("TaxClassPrivateMetadata")
+
+  @@map("tax_taxclass")
+  @@ignore
+}
+
+model TaxClassCountryRate {
+  id          Int       @id @default(autoincrement())
+  tax_class   TaxClass? @relation(fields: [tax_class_id], references: [id])
+  tax_class_id Int?      @map("tax_class_id")
+  country     String    @db.Text
+  rate        Decimal   @db.Decimal
+
+  @@map("tax_taxclasscountryrate")
+  @@unique([country, tax_class_id], map: "unique_country_tax_class")
+  @@unique([country], map: "unique_country_without_tax_class")
+  @@ignore
+}
+
+model TaxConfiguration {
+  id                         Int                        @id @default(autoincrement())
+  channel                    Channel                    @relation(fields: [channel_id], references: [id]) @unique
+  channel_id                 Int                        @map("channel_id")
+  charge_taxes               Boolean                    @default(true)
+  tax_calculation_strategy String?   @default("flat_rates") @map("tax_calculation_strategy")
+  display_gross_prices       Boolean                    @default(true)
+  prices_entered_with_tax  Boolean                    @default(true)
+  tax_app_id                 String?                    @map("tax_app_id")
+  use_weighted_tax_for_shipping Boolean                    @default(false) @map("use_weighted_tax_for_shipping")
+  country_exceptions         TaxConfigurationPerCountry[] 
+  metadata                   Metadata[]                 @relation("TaxConfigurationMetadata")
+  privateMetadata            PrivateMetadata[]          @relation("TaxConfigurationPrivateMetadata")
+
+  @@map("tax_taxconfiguration")
+  @@ignore
+}
+
+model TaxConfigurationPerCountry {
+  id                         Int             @id @default(autoincrement())
+  tax_configuration   TaxConfiguration @relation(fields: [tax_configuration_id], references: [id])
+  tax_configuration_id Int              @map("tax_configuration_id")
+  country                    String          @db.Text
+  charge_taxes               Boolean         @default(true)
+  tax_calculation_strategy String?       @map("tax_calculation_strategy")
+  display_gross_prices       Boolean         @default(true)
+  tax_app_id                 String?         @map("tax_app_id")
+  use_weighted_tax_for_shipping Boolean         @default(false) @map("use_weighted_tax_for_shipping")
+
+  @@map("tax_taxconfigurationpercountry")
+  @@unique([tax_configuration_id, country], map: "tax_taxconfigurationpercountry_tax_configuration_id_country_key")
+  @@ignore
+}
+
+model Channel {
+  id                Int                @id @default(autoincrement())
+  tax_configuration TaxConfiguration?
+
+  @@map("channel_channel")
+  @@ignore
+}
+
+model Metadata {
+    id Int @id @default(autoincrement())
+    key String
+    value String
+    taxClass   TaxClass? @relation(fields: [taxClassId], references: [id], name: "TaxClassMetadata")
+    taxClassId Int? @map("tax_class_id")
+    taxConfiguration   TaxConfiguration? @relation(fields: [taxConfigurationId], references: [id], name: "TaxConfigurationMetadata")
+    taxConfigurationId Int? @map("tax_configuration_id")
+    @@map("core_metadata")
+    @@ignore
+}
+
+model PrivateMetadata {
+    id Int @id @default(autoincrement())
+    key String
+    value String
+    taxClass   TaxClass? @relation(fields: [taxClassId], references: [id], name: "TaxClassPrivateMetadata")
+    taxClassId Int? @map("tax_class_id")
+    taxConfiguration   TaxConfiguration? @relation(fields: [taxConfigurationId], references: [id], name: "TaxConfigurationPrivateMetadata")
+    taxConfigurationId Int? @map("tax_configuration_id")
+
+    @@map("core_privatemetadata")
+    @@ignore
+}

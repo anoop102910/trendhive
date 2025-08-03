@@ -1,0 +1,2931 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+// --- account.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Address {
+  id                Int       @id @default(autoincrement())
+  first_name        String?   @map("first_name") @db.VarChar(256)
+  last_name         String?   @map("last_name") @db.VarChar(256)
+  company_name      String?   @map("company_name") @db.VarChar(256)
+  street_address_1  String?   @map("street_address_1") @db.VarChar(256)
+  street_address_2  String?   @map("street_address_2") @db.VarChar(256)
+  city              String?   @map("city") @db.VarChar(256)
+  city_area         String?   @map("city_area") @db.VarChar(128)
+  postal_code       String?   @map("postal_code") @db.VarChar(20)
+  country           String    @map("country") @db.CountryCode
+  country_area      String?   @map("country_area") @db.VarChar(128)
+  phone             String?   @map("phone") @db.VarChar(128)
+  validation_skipped Boolean @default(false) @map("validation_skipped")
+  user_addresses User[] @relation(name: "user_addresses")
+  default_shipping_address User? @relation(name: "default_shipping_address")
+  default_billing_address User? @relation(name: "default_billing_address")
+  metadata          Json      @default("{}") @map("metadata")
+  private_metadata  Json      @default("{}") @map("private_metadata")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([first_name, last_name, city, country], name: "address_search_gin", type: Gin)
+  @@index([company_name, street_address_1, street_address_2, city, postal_code, phone], name: "warehouse_address_search_gin", type: Gin)
+  @@index([country], name: "address_country_idx", type: BTree)
+  @@map("account_address")
+}
+
+model User {
+  id                        Int                        @id @default(autoincrement())
+  email                     String                     @unique @map("email") @db.VarChar(254)
+  first_name                String?                    @map("first_name") @db.VarChar(256)
+  last_name                 String?                    @map("last_name") @db.VarChar(256)
+  addresses                 Address[]                  @relation(name: "user_addresses")
+  is_staff                  Boolean                    @default(false) @map("is_staff")
+  is_active                 Boolean                    @default(true) @map("is_active")
+  is_confirmed              Boolean                    @default(true) @map("is_confirmed")
+  last_confirm_email_request DateTime?                @map("last_confirm_email_request")
+  note                      String?                    @map("note")
+  date_joined               DateTime                   @default(now()) @map("date_joined")
+  updated_at                DateTime                   @updatedAt @map("updated_at")
+  last_password_reset_request DateTime?                @map("last_password_reset_request")
+  default_shipping_address_id   Int?                     @map("default_shipping_address")
+  default_shipping_address Address? @relation(name: "default_shipping_address", fields: [default_shipping_address_id], references: [id], onDelete: SetNull)
+  default_billing_address_id    Int?                     @map("default_billing_address")
+  default_billing_address Address? @relation(name: "default_billing_address", fields: [default_billing_address_id], references: [id], onDelete: SetNull)
+  avatar                    String?                    @map("avatar") @db.VarChar(100)
+  jwt_token_key             String                     @default(dbgenerated("gen_random_uuid()")) @map("jwt_token_key") @db.VarChar(12)
+  language_code             String                     @default("en") @map("language_code") @db.VarChar(35)
+  search_document           String                     @default("") @map("search_document")
+  uuid                      String                     @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  number_of_orders          Int                      @default(0) @map("number_of_orders")
+  password                  String                     @map("password")
+  last_login                DateTime?                  @map("last_login")
+  is_superuser              Boolean                    @default(false)
+  user_permissions  Permission[]
+  groups Group[]
+  notes CustomerNote[]
+  events CustomerEvent[]
+  staff_notification StaffNotificationRecipient? @relation(fields: [id], references: [user_id])
+  metadata          Json      @default("{}") @map("metadata")
+  private_metadata  Json      @default("{}") @map("private_metadata")
+
+  @@map("account_user")
+  @@index([email], name: "user_email_idx", type: BTree)
+  @@index([first_name], name: "first_name_gin", type: Gin)
+  @@index([last_name], name: "last_name_gin", type: Gin)
+  @@index([search_document], name: "user_search_gin", type: Gin)
+  @@index([private_metadata], name: "user_p_meta_jsonb_path_idx", type: Gin)
+  @@index([date_joined], name: "user_date_joined_idx", type: BTree)
+  @@index([number_of_orders], name: "user_number_of_orders_idx", type: BTree)
+  @@index([email, first_name, last_name], name: "order_user_search_gin", type: Gin)
+
+}
+
+model CustomerNote {
+  id        Int      @id @default(autoincrement())
+  user_id   Int?     @map("user_id")
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  date      DateTime @default(now()) @map("date")
+  content   String   @map("content")
+  is_public Boolean  @default(true) @map("is_public")
+  customer_id Int @map("customer_id")
+  customer User @relation(fields: [customer_id], references: [id], onDelete: Cascade, name: "notes")
+
+  @@map("account_customernote")
+  @@index([date])
+}
+
+model CustomerEvent {
+  id         Int       @id @default(autoincrement())
+  date       DateTime  @default(now()) @map("date")
+  type       String    @map("type") @db.VarChar(255)
+  order_id   Int?      @map("order_id")
+  order      Order?    @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  parameters Json      @default("{}") @map("parameters")
+  user_id    Int? @map("user_id")
+  user User? @relation(fields: [user_id], references: [id], onDelete: Cascade, name: "events")
+  app_id     Int?      @map("app_id")
+  app      App? @relation(fields: [app_id], references: [id], onDelete: SetNull)
+
+  @@map("account_customerevent")
+  @@orderBy([date])
+}
+
+model StaffNotificationRecipient {
+  user_id      Int       @unique @map("user_id")
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  staff_email  String?   @unique @map("staff_email") @db.VarChar(254)
+  active       Boolean   @default(true) @map("active")
+
+  @@map("account_staffnotificationrecipient")
+  @@orderBy([staff_email])
+}
+
+model Group {
+  id                        Int                        @id @default(autoincrement())
+  name                      String                     @unique @map("name") @db.VarChar(150)
+  permissions Permission[]
+   restricted_access_to_channels Boolean @default(false) @map("restricted_access_to_channels")
+  channels Channel[]
+ User User[]
+
+  @@map("auth_group")
+}
+
+model Permission {
+  id Int @id @default(autoincrement())
+  name String @map("name")
+  codename String @map("codename")
+  content_type_id Int @map("content_type_id")
+ Group Group[]
+ User User[]
+  @@map("auth_permission")
+
+}
+
+model App {
+  id Int @id @default(autoincrement())
+  customerEvent CustomerEvent[]
+
+  @@ignore
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  customerEvent CustomerEvent[]
+  @@ignore
+}
+
+model Channel {
+  id Int @id @default(autoincrement())
+  group Group[]
+  @@ignore
+}
+
+
+
+// --- app.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model App {
+  id                  Int             @id @default(autoincrement())
+  uuid                String          @unique @default(uuid())
+  name                String          @db.VarChar(60)
+  createdAt           DateTime        @default(now())
+  isActive            Boolean         @default(true)
+  removedAt           DateTime?       @map("removed_at")
+  type                String          @default("LOCAL") @db.VarChar(60)
+  identifier          String          @db.VarChar(256)
+  permissions         Permission[]    @relation(name: "AppToPermission")
+  aboutApp            String?         @map("about_app")
+  dataPrivacy         String?         @map("data_privacy")
+  dataPrivacyUrl      String?         @map("data_privacy_url") @db.Text
+  homepageUrl         String?         @map("homepage_url") @db.Text
+  supportUrl          String?         @map("support_url") @db.Text
+  configurationUrl    String?         @map("configuration_url") @db.Text
+  appUrl              String?         @map("app_url") @db.Text
+  manifestUrl         String?         @map("manifest_url") @db.Text
+  version             String?         @db.VarChar(60)
+  audience            String?         @db.VarChar(256)
+  isInstalled         Boolean         @default(true)
+  author              String?         @db.VarChar(60)
+  brandLogoDefault    String?         @map("brand_logo_default") @db.Text
+  appToken            AppToken[]
+  appExtension        AppExtension[]
+  ModelWithMetadata   ModelWithMetadata @relation(fields: [modelWithMetadataId], references: [id])
+  modelWithMetadataId Int             @unique
+
+  @@map("app")
+  @@index([modelWithMetadataId], name: "app_modelwithmetadata_id_fkey")
+  @@index([name], name: "app_name_idx")
+  @@index([isActive], name: "app_is_active_idx")
+  @@index([removedAt], name: "app_removed_at_idx")
+}
+
+model AppToken {
+  id        Int    @id @default(autoincrement())
+  app       App    @relation(fields: [appId], references: [id])
+  appId     Int
+  name      String @default("") @db.VarChar(128)
+  authToken String @unique @db.VarChar(128)
+  tokenLast4 String @db.VarChar(4)
+
+  @@map("apptoken")
+  @@index([appId], name: "apptoken_app_id_fkey")
+}
+
+model AppExtension {
+  id              Int      @id @default(autoincrement())
+  app             App      @relation(fields: [appId], references: [id])
+  appId           Int
+  label           String   @db.VarChar(256)
+  url             String   @db.Text
+  mount           String   @db.VarChar(256)
+  target          String   @default("POPUP") @db.VarChar(128)
+  permissions     Permission[] @relation(name: "AppExtensionToPermission")
+  httpTargetMethod String?  @map("http_target_method")
+
+  @@map("appextension")
+  @@index([appId], name: "appextension_app_id_fkey")
+}
+
+model AppInstallation {
+  id             Int       @id @default(autoincrement())
+  uuid           String    @unique @default(uuid())
+  appName        String    @map("app_name") @db.VarChar(60)
+  manifestUrl    String    @map("manifest_url") @db.Text
+  permissions    Permission[] @relation(name: "AppInstallationToPermission")
+  brandLogoDefault String? @map("brand_logo_default") @db.Text
+
+  @@map("appinstallation")
+}
+
+
+model Permission {
+  id           Int            @id @default(autoincrement())
+  App          App[]          @relation(name: "AppToPermission")
+  AppExtension AppExtension[] @relation(name: "AppExtensionToPermission")
+  AppInstallation AppInstallation[] @relation(name: "AppInstallationToPermission")
+
+  @@map("permission")
+}
+
+model ModelWithMetadata {
+  id         Int      @id @default(autoincrement())
+  App        App?
+
+  @@map("modelwithmetadata")
+}
+
+
+// --- channel.prisma ---
+
+model Channel {
+  id                                        Int                                    @id @default(autoincrement())
+  name                                      String
+  is_active                                 Boolean                              @default(false)
+  slug                                      String                                 @unique
+  currency_code                             String
+  default_country                           String
+  allocation_strategy                       String                                 @default("PRIORITIZE_SORTING_ORDER")
+  order_mark_as_paid_strategy               String                                 @default("PAYMENT_FLOW")
+  default_transaction_flow_strategy       String                                 @default("CHARGE")
+  automatically_confirm_all_new_orders  Boolean?                             @default(true)
+  allow_unpaid_orders                       Boolean                              @default(false)
+  automatically_fulfill_non_shippable_gift_card Boolean?                             @default(true)
+  expire_orders_after                       Int?                                   @default(null)
+  delete_expired_orders_after               Int                                    @default(5184000) // default=datetime.timedelta(days=60), represented in seconds
+  include_draft_order_in_voucher_usage  Boolean                              @default(false)
+  use_legacy_error_flow_for_checkout      Boolean                              @default(true)
+  automatically_complete_fully_paid_checkouts Boolean                              @default(false)
+  draft_order_line_price_freeze_period    Int?                                   @default(24)
+  use_legacy_line_discount_propagation_for_order Boolean                              @default(true)
+  release_funds_for_expired_checkouts     Boolean                              @default(false)
+  checkout_ttl_before_releasing_funds   Int                                    @default(21600) // default=datetime.timedelta(hours=6), represented in seconds
+  checkout_release_funds_cut_off_date     DateTime?
+
+  @@map("Channel")
+  @@index([slug])
+}
+
+
+// --- checkout.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  checkouts Checkout[]
+  email     String?
+  // other user fields
+}
+
+model Address {
+  id Int @id @default(autoincrement())
+  checkoutBilling  Checkout[] @relation("BillingAddress")
+  checkoutShipping Checkout[] @relation("ShippingAddress")
+
+  //Other address fields
+}
+
+model Channel {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other channel fields
+}
+
+model ShippingMethod {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other shipping method fields
+}
+
+model Warehouse {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other warehouse fields
+}
+
+model GiftCard {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other giftcard fields
+  current_balance_amount Float?
+
+}
+
+model ProductVariant {
+  id        Int           @id @default(autoincrement())
+  CheckoutLine CheckoutLine[]
+  is_shipping_required Boolean? 
+  // Other product variant fields
+}
+
+model Payment {
+  id        Int @id @default(autoincrement())
+  checkoutId String
+  checkout  Checkout @relation(fields: [checkoutId], references: [token])
+  is_active Boolean?
+}
+
+model Checkout {
+  createdAt                 DateTime              @default(now())
+  lastChange                DateTime              @default(now()) @updatedAt @db.Timestamp @map("last_change")
+  completingStartedAt       DateTime?             @db.Timestamp @map("completing_started_at")
+  lastTransactionModifiedAt DateTime?             @db.Timestamp @map("last_transaction_modified_at")
+  automaticallyRefundable   Boolean               @default(false) @map("automatically_refundable")
+  user                      User?                 @relation(fields: [userId], references: [id])
+  userId                    Int?                  @map("user_id")
+  email                     String?               @db.VarChar
+  token                     String                @id @default(uuid()) @db.Uuid
+  channel                   Channel               @relation(fields: [channelId], references: [id])
+  channelId                 Int                   @map("channel_id")
+  saveBillingAddress        Boolean               @default(true) @map("save_billing_address")
+  billingAddress            Address?              @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  billingAddressId          Int?                  @map("billing_address_id")
+  saveShippingAddress       Boolean               @default(true) @map("save_shipping_address")
+  shippingAddress           Address?              @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  shippingAddressId         Int?                  @map("shipping_address_id")
+  shippingMethod            ShippingMethod?       @relation(fields: [shippingMethodId], references: [id])
+  shippingMethodId          Int?                  @map("shipping_method_id")
+  shippingMethodName        String?               @db.VarChar(255) @map("shipping_method_name")
+  externalShippingMethodId  String?               @db.VarChar(512) @map("external_shipping_method_id")
+  collectionPoint           Warehouse?            @relation(fields: [collectionPointId], references: [id])
+  collectionPointId         Int?                  @map("collection_point_id")
+  note                      String                @default("") @db.Text
+  currency                  String                @db.VarChar(3)
+  country                   String                @db.CountryCode
+  totalNetAmount            Decimal               @default(0) @db.Decimal
+  totalGrossAmount          Decimal               @default(0) @db.Decimal
+  baseTotalAmount           Decimal               @default(0) @db.Decimal @map("base_total_amount")
+  subtotalNetAmount         Decimal               @default(0) @db.Decimal @map("subtotal_net_amount")
+  subtotalGrossAmount       Decimal               @default(0) @db.Decimal @map("subtotal_gross_amount")
+  baseSubtotalAmount        Decimal               @default(0) @db.Decimal @map("base_subtotal_amount")
+  shippingPriceNetAmount     Decimal               @default(0) @db.Decimal @map("shipping_price_net_amount")
+  shippingPriceGrossAmount  Decimal               @default(0) @db.Decimal @map("shipping_price_gross_amount")
+  shippingTaxRate           Decimal               @default(0) @db.Decimal @map("shipping_tax_rate")
+  undiscountedBaseShippingPriceAmount Decimal               @default(0) @db.Decimal @map("undiscounted_base_shipping_price_amount")
+  authorizeStatus           String                @default("none") @db.VarChar(32) @map("authorize_status") @index
+  chargeStatus              String                @default("none") @db.VarChar(32) @map("charge_status") @index
+  priceExpiration           DateTime              @default(now()) @db.Timestamp @map("price_expiration")
+  discountAmount            Decimal               @default(0) @db.Decimal @map("discount_amount")
+  discountName              String?               @db.VarChar(255) @map("discount_name")
+  translatedDiscountName    String?               @db.VarChar(255) @map("translated_discount_name")
+  voucherCode               String?               @db.VarChar(255) @map("voucher_code")
+  isVoucherUsageIncreased Boolean               @default(false) @map("is_voucher_usage_increased")
+  redirectUrl               String?               @db.Text @map("redirect_url")
+  trackingCode              String?               @db.VarChar(255) @map("tracking_code")
+  languageCode              String                @default("en") @db.VarChar(35) @map("language_code")
+  taxExemption              Boolean               @default(false) @map("tax_exemption")
+  taxError                  String?               @db.VarChar(256) @map("tax_error")
+  lines                     CheckoutLine[]
+  giftCards                 GiftCard[] @relation("CheckoutGiftCards")
+  payments Payment[]
+  metadataStorage CheckoutMetadata?
+
+  @@map("Checkout")
+  @@index([lastChange])
+}
+
+model CheckoutLine {
+  id                      String   @id @default(uuid()) @db.Uuid
+  oldId                   Int?     @unique @map("old_id")
+  createdAt               DateTime @default(now()) @db.Timestamp
+  checkout                Checkout @relation(fields: [checkoutId], references: [token])
+  checkoutId              String   @map("checkout_id")
+  variant                 ProductVariant @relation(fields: [variantId], references: [id])
+  variantId               Int   @map("variant_id")
+  quantity                Int      @map("quantity")
+  isGift                  Boolean  @default(false) @map("is_gift")
+  priceOverride           Decimal? @db.Decimal @map("price_override")
+  currency                String   @db.VarChar(3)
+  undiscountedUnitPriceAmount Decimal  @default(0) @db.Decimal @map("undiscounted_unit_price_amount")
+  priorUnitPriceAmount    Decimal? @db.Decimal @map("prior_unit_price_amount")
+  totalPriceNetAmount      Decimal  @default(0) @db.Decimal @map("total_price_net_amount")
+  totalPriceGrossAmount     Decimal  @default(0) @db.Decimal @map("total_price_gross_amount")
+  taxRate                 Decimal  @default(0) @db.Decimal @map("tax_rate")
+  metadata                Metadata[]
+  privateMetadata PrivateMetadata[]
+
+
+  @@map("CheckoutLine")
+  @@index([createdAt, id])
+}
+
+model CheckoutMetadata {
+  checkout   Checkout @relation(fields: [checkoutId], references: [token]) @unique
+  checkoutId String @map("checkout_id")
+  id    Int @id @default(autoincrement())
+  metadata                Metadata[]
+  privateMetadata PrivateMetadata[]
+
+  @@map("CheckoutMetadata")
+}
+
+model Metadata {
+  id        Int      @id @default(autoincrement())
+  key       String
+  value     String
+  checkoutLine   CheckoutLine? @relation(fields: [checkoutLineId], references: [id])
+  checkoutLineId String? @db.Uuid @map("checkout_line_id")
+  checkoutMetadata   CheckoutMetadata? @relation(fields: [checkoutMetadataId], references: [id])
+  checkoutMetadataId Int? @map("checkout_metadata_id")
+  @@map("Metadata")
+}
+
+model PrivateMetadata {
+  id        Int      @id @default(autoincrement())
+  key       String
+  value     String
+  checkoutLine   CheckoutLine? @relation(fields: [checkoutLineId], references: [id])
+  checkoutLineId String? @db.Uuid @map("checkout_line_id")
+  checkoutMetadata   CheckoutMetadata? @relation(fields: [checkoutMetadataId], references: [id])
+  checkoutMetadataId Int? @map("checkout_metadata_id")
+  @@map("PrivateMetadata")
+}
+
+
+// --- core.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EventPayload {
+  id         Int               @id @default(autoincrement())
+  payload    String            @default("")
+  payload_file String? // Assuming FileField stores path as string
+  created_at DateTime          @default(now())
+  deliveries EventDelivery[]
+
+  @@map("eventpayload")
+}
+
+model EventDelivery {
+  id         Int                  @id @default(autoincrement())
+  created_at DateTime             @default(now())
+  status     String               @default("pending")
+  event_type String
+  payloadId  Int? // Foreign Key
+  payload    EventPayload?        @relation(fields: [payloadId], references: [id], onDelete: Cascade)
+  webhookId  Int
+  webhook    Webhook              @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  attempts   EventDeliveryAttempt[]
+
+  @@orderBy([createdAt(desc)])
+  @@map("eventdelivery")
+}
+
+model EventDeliveryAttempt {
+  id                 Int               @id @default(autoincrement())
+  deliveryId         Int? // Foreign Key
+  delivery           EventDelivery?    @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  created_at         DateTime          @default(now())
+  task_id            String?
+  duration           Float?
+  response           String?
+  response_headers   String?
+  response_status_code Int?
+  request_headers    String?
+  status             String            @default("pending")
+
+  @@orderBy([createdAt(desc)])
+  @@map("eventdeliveryattempt")
+}
+
+// Mock Webhook Model - Assuming it exists in webhook.Webhook
+model Webhook {
+  id        Int             @id @default(autoincrement())
+  deliveries EventDelivery[]
+  // Add other fields from Webhook model here if needed
+  @@map("webhook")
+}
+
+// Abstract models are not directly representable in Prisma.
+// You'll need to inherit the fields in concrete models.
+// Here's how you might represent the fields of SortableModel in a concrete model:
+// model ConcreteModel {
+//   id        Int      @id @default(autoincrement())
+//   sort_order Int?   @index
+//   // ... other fields
+//   @@map("concrete_model")
+// }
+
+// Example concrete model incorporating PublishableModel
+// model ConcretePublishableModel {
+//   id           Int       @id @default(autoincrement())
+//   published_at DateTime?
+//   is_published Boolean @default(false)
+//   @@map("concrete_publishable_model")
+// }
+
+// Example concrete model incorporating ModelWithMetadata
+// model ConcreteMetadataModel {
+//   id               Int      @id @default(autoincrement())
+//   private_metadata Json     @default("{}")
+//   metadata         Json     @default("{}")
+//   @@index([private_metadata], map: "concrete_metadata_model_p_meta_idx")
+//   @@index([metadata], map: "concrete_metadata_model_meta_idx")
+//   @@map("concrete_metadata_model")
+// }
+
+// Example concrete model incorporating ModelWithExternalReference
+// model ConcreteExternalReferenceModel {
+//   id                 Int      @id @default(autoincrement())
+//   external_reference String?  @unique @index @db.VarChar(250)
+//   @@map("concrete_external_reference_model")
+// }
+
+// Example concrete model incorporating Job
+// model ConcreteJob {
+//   id         Int      @id @default(autoincrement())
+//   status     String   @default("pending") // Assuming JobStatus.PENDING is the default string value
+//   message    String?
+//   created_at DateTime @default(now())
+//   updated_at DateTime @updatedAt
+//   @@map("concrete_job")
+// }
+
+
+// --- csv.prisma ---
+
+model User {
+  id               Int                @id @default(autoincrement())
+  exportFiles      ExportFile[]       @relation("UserExportFiles")
+  exportCsvEvents  ExportEvent[]      @relation("UserExportEvents")
+}
+
+model App {
+  id               Int                @id @default(autoincrement())
+  exportFiles      ExportFile[]       @relation("AppExportFiles")
+  exportCsvEvents  ExportEvent[]      @relation("AppExportEvents")
+}
+
+model Job {
+  id        Int      @id @default(autoincrement())
+  # Add fields specific to the Job model here if any
+}
+
+model ExportFile {
+  id           Int        @id @default(autoincrement())
+  user         User?      @relation("UserExportFiles", fields: [userId], references: [id])
+  userId       Int?       @map("user_id")
+  app          App?       @relation("AppExportFiles", fields: [appId], references: [id])
+  appId        Int?       @map("app_id")
+  contentFile  String?    @map("content_file")
+  events       ExportEvent[]
+  // Assuming content_file is stored as a path or URL
+  Job          Job        @relation(fields: [jobId], references: [id])
+  jobId        Int        @unique
+
+  @@map("export_file")
+}
+
+enum ExportEvents {
+  PRODUCT_EXPORTED
+  ORDER_EXPORTED
+  SALE_EXPORTED
+  CUSTOMER_EXPORTED
+}
+
+model ExportEvent {
+  id           Int          @id @default(autoincrement())
+  date         DateTime     @default(now())
+  type         ExportEvents @map("type")
+  parameters   Json
+  exportFile   ExportFile   @relation(fields: [exportFileId], references: [id])
+  exportFileId Int          @map("export_file_id")
+  user         User?        @relation("UserExportEvents", fields: [userId], references: [id])
+  userId       Int?         @map("user_id")
+  app          App?         @relation("AppExportEvents", fields: [appId], references: [id])
+  appId        Int?         @map("app_id")
+
+  @@map("export_event")
+}
+
+// --- discount.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VoucherType {
+  ENTIRE_ORDER
+  SPECIFIC_PRODUCT
+  SHIPPING
+}
+
+enum DiscountValueType {
+  FIXED
+  PERCENTAGE
+}
+
+enum RewardValueType {
+  FIXED
+  PERCENTAGE
+}
+
+enum RewardType {
+  SUBTOTAL
+  LINE_ITEM
+}
+
+enum PromotionType {
+  CATALOGUE
+  ORDER
+}
+
+enum DiscountType {
+  MANUAL
+  AUTOMATIC
+  VOUCHER
+  PROMOTION
+}
+
+enum PromotionEvents {
+  PROMOTION_CREATED
+  PROMOTION_UPDATED
+  PROMOTION_DELETED
+  PROMOTION_STARTED
+  PROMOTION_ENDED
+  RULE_CREATED
+  RULE_UPDATED
+  RULE_DELETED
+}
+
+model Voucher {
+  id                         Int                         @id @default(autoincrement())
+  type                       String                      @default("ENTIRE_ORDER")
+  name                       String?                      @map("name")
+  usage_limit                Int?                       @map("usage_limit")
+  start_date                 DateTime                    @default(now())
+  end_date                   DateTime?                    @map("end_date")
+  apply_once_per_order       Boolean                     @default(false)
+  apply_once_per_customer    Boolean                     @default(false)
+  single_use                 Boolean                     @default(false)
+  only_for_staff             Boolean                     @default(false)
+  discount_value_type        String                      @default("FIXED")
+  countries                  String[]
+  min_checkout_items_quantity Int?                       @map("min_checkout_items_quantity")
+  products                   Product[]                   @relation(name: "VoucherProducts")
+  variants                   ProductVariant[]            @relation(name: "VoucherVariants")
+  collections                Collection[]                @relation(name: "VoucherCollections")
+  categories                 Category[]                  @relation(name: "VoucherCategories")
+  codes                      VoucherCode[]               @relation(name: "VoucherToVoucherCode")
+  channel_listings           VoucherChannelListing[]     @relation(name: "VoucherToVoucherChannelListing")
+  translations               VoucherTranslation[]        @relation(name: "VoucherToVoucherTranslation")
+  orderdiscounts             OrderDiscount[]
+  orderlinediscounts         OrderLineDiscount[]
+  checkoutdiscounts          CheckoutDiscount[]
+  checkoutlinediscounts      CheckoutLineDiscount[]
+
+  @@map("discount_voucher")
+}
+
+model VoucherCode {
+  id             String            @id @unique @default(uuid())
+  code           String            @unique @db.Text @map("code")
+  used           Int             @default(0)
+  is_active      Boolean           @default(true)
+  voucher        Voucher           @relation(name: "VoucherToVoucherCode", fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId      Int             @map("voucher_id") @db.Integer
+  created_at     DateTime          @default(now())
+  customers      VoucherCustomer[] @relation(name: "VoucherCodeToVoucherCustomer")
+
+  @@index([voucherId], name: "vouchercode_voucher_idx")
+  @@map("discount_vouchercode")
+}
+
+model VoucherChannelListing {
+  voucher         Voucher @relation(name: "VoucherToVoucherChannelListing", fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId       Int     @map("voucher_id") @db.Integer
+  channel         Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId       Int     @map("channel_id") @db.Integer
+  discount_value  Decimal @db.Decimal
+  currency        String  @db.VarChar(3)
+  min_spent_amount Decimal? @db.Decimal @map("min_spent_amount")
+
+  @@id([voucherId, channelId])
+  @@unique([voucherId, channelId])
+  @@map("discount_voucherchannellisting")
+}
+
+model VoucherCustomer {
+  voucher_code   VoucherCode @relation(name: "VoucherCodeToVoucherCustomer", fields: [voucher_codeId], references: [id], onDelete: Cascade)
+  voucher_codeId String      @map("voucher_code_id")
+  customer_email String      @db.VarChar(254)
+
+  @@id([voucher_codeId, customer_email])
+  @@unique([voucher_codeId, customer_email])
+  @@index([voucher_codeId], name: "vouchercustomer_voucher_code_idx")
+  @@map("discount_vouchercustomer")
+}
+
+model VoucherTranslation {
+  id            Int      @id @default(autoincrement())
+  language_code String   @db.VarChar(10)
+  voucher         Voucher @relation(name: "VoucherToVoucherTranslation", fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId       Int   @map("voucher_id") @db.Integer
+  name          String?   @map("name")
+
+  @@unique([language_code, voucherId])
+  @@map("discount_vouchertranslation")
+}
+
+model Promotion {
+  id                         String                  @id @unique @default(uuid())
+  name                       String                  @db.VarChar(255)
+  type                       String                  @default("CATALOGUE")
+  description                Json?                   @map("description")
+  old_sale_id                Int?                    @unique @map("old_sale_id")
+  start_date                 DateTime                @default(now())
+  end_date                   DateTime?                    @map("end_date")
+  created_at                 DateTime                @default(now())
+  updated_at                 DateTime                @default(now())
+  last_notification_scheduled_at DateTime?           @map("last_notification_scheduled_at")
+  translations               PromotionTranslation[]  @relation(name: "PromotionToPromotionTranslation")
+  rules                      PromotionRule[]         @relation(name: "PromotionToPromotionRule")
+  events                     PromotionEvent[]        @relation(name: "PromotionToPromotionEvent")
+  orderdiscounts             OrderDiscount[]
+  orderlinediscounts         OrderLineDiscount[]
+  checkoutdiscounts          CheckoutDiscount[]
+  checkoutlinediscounts      CheckoutLineDiscount[]
+
+  @@index([start_date], name: "start_date_idx")
+  @@index([end_date], name: "end_date_idx")
+  @@map("discount_promotion")
+}
+
+model PromotionTranslation {
+  id            Int       @id @default(autoincrement())
+  language_code String    @db.VarChar(10)
+  name          String?    @map("name")
+  description   Json?     @map("description")
+  promotion       Promotion @relation(name: "PromotionToPromotionTranslation", fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId   String    @map("promotion_id")
+
+  @@unique([language_code, promotionId])
+  @@map("discount_promotiontranslation")
+}
+
+model PromotionRule {
+  id                    String                 @id @unique @default(uuid())
+  name                  String?                @db.VarChar(255)
+  description           Json?                  @map("description")
+  promotion             Promotion              @relation(name: "PromotionToPromotionRule", fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId           String                 @map("promotion_id")
+  channels              Channel[]
+  catalogue_predicate   Json                   @default("{}")
+  order_predicate       Json                   @default("{}")
+  variants              PromotionRule_Variants[]
+  reward_value_type     String?                @map("reward_value_type")
+  reward_value          Decimal?               @db.Decimal @map("reward_value")
+  reward_type           String?                @map("reward_type")
+  gifts                 ProductVariant[]       @relation(name: "PromotionRuleToProductVariant")
+  old_channel_listing_id Int?                   @unique @map("old_channel_listing_id")
+  variants_dirty        Boolean                @default(false)
+  translations          PromotionRuleTranslation[] @relation(name: "PromotionRuleToPromotionRuleTranslation")
+  orderdiscounts             OrderDiscount[]
+  orderlinediscounts         OrderLineDiscount[]
+  checkoutdiscounts          CheckoutDiscount[]
+  checkoutlinediscounts      CheckoutLineDiscount[]
+
+  @@map("discount_promotionrule")
+}
+
+model PromotionRule_Variants {
+  id               BigInt           @id @unique @default(autoincrement())
+  promotionrule   PromotionRule @relation(fields: [promotionruleId], references: [id], onDelete: Cascade)
+  promotionruleId String
+  productvariant ProductVariant @relation(fields: [productvariantId], references: [id], onDelete: Cascade)
+  productvariantId Int
+
+  @@map("discount_promotionrule_variants")
+}
+
+model PromotionRuleTranslation {
+  id              Int           @id @default(autoincrement())
+  language_code String        @db.VarChar(10)
+  name            String?        @map("name")
+  description     Json?         @map("description")
+  promotion_rule  PromotionRule @relation(name: "PromotionRuleToPromotionRuleTranslation", fields: [promotion_ruleId], references: [id], onDelete: Cascade)
+  promotion_ruleId String      @map("promotion_rule_id")
+
+  @@unique([language_code, promotion_ruleId])
+  @@map("discount_promotionruletranslation")
+}
+
+abstract model BaseDiscount {
+  id             String  @id @unique @default(uuid())
+  created_at     DateTime @default(now())
+  type           String  @default("MANUAL")
+  value_type     String  @default("FIXED")
+  value          Decimal @db.Decimal @default(0.0)
+  amount_value   Decimal @db.Decimal @default(0.0)
+  currency       String  @db.VarChar(3)
+  name           String?  @map("name")
+  translated_name String?  @map("translated_name")
+  reason         String? @db.Text
+  promotion_ruleId String? @map("promotion_rule_id")
+  promotion_rule PromotionRule? @relation(fields: [promotion_ruleId], references: [id])
+  voucherId Int? @map("voucher_id") @db.Integer
+  voucher Voucher? @relation(fields: [voucherId], references: [id])
+  voucher_code String? @map("voucher_code")
+}
+
+model OrderDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  orderId Int? @map("order_id")
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  old_id  Int? @unique @map("old_id")
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@index([promotion_ruleId])
+  @@map("discount_orderdiscount")
+}
+
+model OrderLineDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  lineId Int? @map("line_id")
+  line  OrderLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  unique_type String? @map("unique_type")
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@unique([lineId, unique_type], name: "unique_orderline_discount_type")
+  @@index([promotion_ruleId])
+  @@map("discount_orderlinediscount")
+}
+
+model CheckoutDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  checkoutId Int? @map("checkout_id")
+  checkout Checkout? @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@unique([checkoutId, promotion_ruleId])
+  @@index([promotion_ruleId])
+  @@map("discount_checkoutdiscount")
+}
+
+model CheckoutLineDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  lineId Int? @map("line_id")
+  line CheckoutLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  unique_type String? @map("unique_type")
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@unique([lineId, unique_type], name: "unique_checkoutline_discount_type")
+  @@index([promotion_ruleId])
+  @@map("discount_checkoutlinediscount")
+}
+
+model PromotionEvent {
+  id          String   @id @unique @default(uuid())
+  date        DateTime @default(now())
+  type        String   @db.VarChar(255)
+  parameters  Json     @default("{}")
+  userId      String?   @map("user_id")
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appId       String?    @map("app_id")
+  app         App?       @relation(fields: [appId], references: [id], onDelete: SetNull)
+  promotion   Promotion @relation(name: "PromotionToPromotionEvent", fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId String
+
+  @@map("discount_promotionevent")
+}
+
+model Channel {
+  id                     Int                      @id @default(autoincrement())
+  VoucherChannelListing VoucherChannelListing[]  @relation(name: "VoucherChannelListingToChannel")
+  PromotionRule         PromotionRule[]
+}
+
+model Product {
+  id        Int       @id @default(autoincrement())
+  vouchers Voucher[] @relation(name: "VoucherProducts")
+}
+
+model ProductVariant {
+  id               Int               @id @default(autoincrement())
+  vouchers       Voucher[]         @relation(name: "VoucherVariants")
+  promotionRules PromotionRule[]    @relation(name: "PromotionRuleToProductVariant")
+}
+
+model Collection {
+  id        Int       @id @default(autoincrement())
+  vouchers Voucher[] @relation(name: "VoucherCollections")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  vouchers Voucher[] @relation(name: "VoucherCategories")
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  discounts OrderDiscount[]
+}
+
+model OrderLine {
+  id Int @id @default(autoincrement())
+  discounts OrderLineDiscount[]
+}
+
+model Checkout {
+  id Int @id @default(autoincrement())
+  discounts CheckoutDiscount[]
+}
+
+model CheckoutLine {
+  id Int @id @default(autoincrement())
+  discounts CheckoutLineDiscount[]
+}
+
+model App {
+  id String @id
+  promotion_events PromotionEvent[]
+}
+
+model User {
+  id String @id
+  promotion_events PromotionEvent[]
+}
+
+// --- giftcard.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model GiftCardTag {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique @db.VarChar(255)
+  gift_cards GiftCard[]
+
+  @@index([name], name: "gift_card_tag_search_gin", type: Gin)
+  @@map("giftcardtag")
+}
+
+model GiftCard {
+  id                     Int       @id @default(autoincrement())
+  code                   String    @unique @db.VarChar(16)
+  is_active              Boolean   @default(true)
+  created_by_id          Int?      @map("created_by")
+  created_by             User?     @relation(fields: [created_by_id], references: [id], name: "GiftCard_created_by", onDelete: SetNull)
+  used_by_id             Int?      @map("used_by")
+  used_by                User?     @relation(fields: [used_by_id], references: [id], name: "GiftCard_used_by", onDelete: SetNull)
+  created_by_email       String?   @db.Text
+  used_by_email          String?   @db.Text
+  app_id                 Int?      @map("app")
+  app                    App?      @relation(fields: [app_id], references: [id], name: "GiftCard_app", onDelete: SetNull)
+  expiry_date            DateTime? @db.Date
+  tags                   GiftCardTag[]
+  created_at             DateTime  @default(now()) @db.Timestamptz()
+  last_used_on           DateTime? @db.Timestamptz()
+  product_id             Int?      @map("product")
+  product                Product?  @relation(fields: [product_id], references: [id], onDelete: SetNull)
+  fulfillment_line_id  Int? @map("fulfillment_line")
+  fulfillment_line       FulfillmentLine? @relation(fields: [fulfillment_line_id], references: [id], onDelete: SetNull)
+  currency               String    @default("USD") @db.VarChar(3)
+  initial_balance_amount Decimal   @db.Decimal
+  current_balance_amount Decimal   @db.Decimal
+  search_vector          String?   @db.Text
+  search_index_dirty     Boolean   @default(true)
+  events                 GiftCardEvent[]
+  private_metadata       Json      @default("{}")
+  metadata               Json      @default("{}")
+
+  @@index([created_at])
+  @@index([code])
+  @@index([search_vector], name: "giftcard_tsearch", type: Gin)
+  @@map("giftcard")
+}
+
+model GiftCardEvent {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now()) @db.Timestamptz()
+  type        String   @db.VarChar(255)
+  parameters  Json     @default("{}")
+  user_id     Int?     @map("user")
+  user        User?    @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  app_id      Int?     @map("app")
+  app         App?     @relation(fields: [app_id], references: [id], onDelete: SetNull)
+  order_id    Int?     @map("order")
+  order       Order?   @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  gift_card_id Int @map("gift_card")
+  gift_card GiftCard @relation(fields: [gift_card_id], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@map("giftcardevent")
+}
+
+model User {
+  id                  Int              @id @default(autoincrement())
+  GiftCard_created_by GiftCard[]       @relation(name: "GiftCard_created_by")
+  GiftCard_used_by    GiftCard[]       @relation(name: "GiftCard_used_by")
+  gift_card_events    GiftCardEvent[]
+
+  @@map("auth_user")
+}
+
+model App {
+  id              Int             @id @default(autoincrement())
+  GiftCard_app    GiftCard[]      @relation(name: "GiftCard_app")
+  gift_card_events GiftCardEvent[]
+
+  @@map("app_app")
+}
+
+model Product {
+  id        Int        @id @default(autoincrement())
+  gift_cards GiftCard[]
+  @@map("product_product")
+}
+
+model FulfillmentLine {
+  id Int @id @default(autoincrement())
+  gift_cards GiftCard[]
+  @@map("order_fulfillmentline")
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  gift_card_events GiftCardEvent[]
+  @@map("order_order")
+}
+
+// --- invoice.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  metadata       Json?          
+  privateMetadata Json?          
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId        Int?          @map("order_id")
+  number         String?       
+  created        DateTime?     
+  externalUrl    String?       @map("external_url") @db.VarChar(2048)
+  invoiceFile    String        @map("invoice_file")
+  events         InvoiceEvent[]
+  status         String
+  message        String?       
+  name           String?
+
+  @@index([createdAt], name: "invoice_created_at_idx")
+  @@map("Invoice")
+}
+
+model InvoiceEvent {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @default(now())
+  type       String
+  invoice    Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoiceId  Int?     @map("invoice_id")
+  order      Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId    Int?     @map("order_id")
+  user       String?  @map("user_id") // Assuming AUTH_USER_MODEL points to a model with an id field of type String
+  app        App?     @relation(fields: [appId], references: [id], onDelete: SetNull)
+  appId      Int?     @map("app_id")
+  parameters Json   @default("{}")
+
+  @@map("InvoiceEvent")
+}
+
+model Order {
+  id            Int            @id @default(autoincrement())
+  invoices      Invoice[]
+  invoice_events InvoiceEvent[]
+
+  @@map("Order")
+}
+
+model App {
+    id            Int            @id @default(autoincrement())
+    invoice_events InvoiceEvent[]
+
+    @@map("App")
+}
+
+// --- menu.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Menu {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  name        String
+  slug        String    @unique
+  items       MenuItem[]
+  metadata    Json      @default("{}")
+  privateMetadata Json @default("{}")
+
+  @@map("menu_menu")
+}
+
+model MenuItem {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  menuId      Int
+  menu        Menu      @relation(fields: [menuId], references: [id])
+  name        String
+  parentId    Int?      @map("parent_id")
+  parent      MenuItem? @relation("MenuItemToMenuItem", fields: [parentId], references: [id])
+  children    MenuItem[] @relation("MenuItemToMenuItem")
+  url         String?   @db.VarChar(256)
+  categoryId  Int?      @map("category_id")
+  category    Category? @relation(fields: [categoryId], references: [id])
+  collectionId Int?      @map("collection_id")
+  collection  Collection? @relation(fields: [collectionId], references: [id])
+  pageId      Int?      @map("page_id")
+  page        Page?     @relation(fields: [pageId], references: [id])
+  sortOrder   Int
+  translations MenuItemTranslation[]
+  metadata    Json      @default("{}")
+  privateMetadata Json @default("{}")
+
+  @@index([menuId])
+  @@map("menu_menuitem")
+}
+
+model MenuItemTranslation {
+  id           Int      @id @default(autoincrement())
+  languageCode String   @map("language_code")
+  menuItemId   Int      @map("menu_item_id")
+  menuItem     MenuItem @relation(fields: [menuItemId], references: [id])
+  name         String   @db.VarChar(128)
+
+  @@unique([languageCode, menuItemId])
+  @@index([menuItemId])
+  @@map("menu_menuitemtranslation")
+}
+
+model Category {
+  id Int @id @default(autoincrement())
+  menuItems MenuItem[]
+
+  @@map("product_category")
+}
+
+model Collection {
+  id Int @id @default(autoincrement())
+  menuItems MenuItem[]
+
+  @@map("product_collection")
+}
+
+model Page {
+  id Int @id @default(autoincrement())
+  menuItems MenuItem[]
+
+  @@map("page_page")
+}
+
+
+// --- order.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id                                    String                            @id @default(uuid())
+  number                                Int                               @unique @default(autoincrement())
+  useOldId                              Boolean                           @default(false)
+  createdAt                             DateTime                          @default(now())
+  updatedAt                             DateTime                          @updatedAt @db.Timestamp
+  expiredAt                             DateTime?                         @db.Timestamp
+  status                                String                            @default("UNFULFILLED")
+  authorizeStatus                       String                            @default("NONE") @db.VarChar(32)
+  chargeStatus                          String                            @default("NONE") @db.VarChar(32)
+  user                                  User?                             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId                                String?                           @map("user_id")
+  languageCode                          String                            @default("en") @db.VarChar(35)
+  trackingClientId                      String?                           @db.VarChar(36)
+  billingAddress                        Address?                          @relation(fields: [billingAddressId], references: [id], onDelete: SetNull, name: "billing_address")
+  billingAddressId                      String?                           @map("billing_address_id")
+  shippingAddress                       Address?                          @relation(fields: [shippingAddressId], references: [id], onDelete: SetNull, name: "shipping_address")
+  shippingAddressId                     String?                           @map("shipping_address_id")
+  draftSaveBillingAddress               Boolean?                          
+  draftSaveShippingAddress              Boolean?
+  userEmail                             String                            @db.VarChar(254)
+  originalId                            String?                           @map("original_id")
+  original                              Order?                            @relation(
+    fields: [originalId],
+    references: [id],
+    onDelete: SetNull,
+    name: "OrderToOrder"
+  )
+  relatedOrders                         Order[]                           @relation(
+    name: "OrderToOrder"
+  )
+  origin                                String                            @db.VarChar(32)
+  currency                              String                            @db.VarChar(3)
+  shippingMethod                        ShippingMethod?                   @relation(fields: [shippingMethodId], references: [id], onDelete: SetNull)
+  shippingMethodId                      String?                           @map("shipping_method_id")
+  collectionPoint                       Warehouse?                        @relation(fields: [collectionPointId], references: [id], onDelete: SetNull)
+  collectionPointId                     String?                           @map("collection_point_id")
+  shippingMethodName                    String?                           @db.VarChar(255)
+  collectionPointName                   String?                           @db.VarChar(255)
+  channel                               Channel                           @relation(fields: [channelId], references: [id], onDelete: Protect)
+  channelId                             String                            @map("channel_id")
+  shippingPriceNetAmount                Decimal                           @db.Decimal
+  shippingPriceGrossAmount               Decimal                           @db.Decimal
+  baseShippingPriceAmount               Decimal                           @db.Decimal
+  undiscountedBaseShippingPriceAmount  Decimal                           @db.Decimal
+  shippingTaxRate                       Decimal?                          @db.Decimal
+  shippingTaxClass                      TaxClass?                         @relation(fields: [shippingTaxClassId], references: [id], onDelete: SetNull)
+  shippingTaxClassId                    String?                           @map("shipping_tax_class_id")
+  shippingTaxClassName                  String?                           @db.VarChar(255)
+  shippingTaxClassPrivateMetadata       Json                              @default("{}") @db.Json
+  shippingTaxClassMetadata              Json                              @default("{}") @db.Json
+  checkoutToken                         String?                           @db.VarChar(36)
+  linesCount                            Int
+  totalNetAmount                        Decimal                           @db.Decimal
+  undiscountedTotalNetAmount           Decimal                           @db.Decimal
+  totalGrossAmount                      Decimal                           @db.Decimal
+  undiscountedTotalGrossAmount         Decimal                           @db.Decimal
+  totalChargedAmount                    Decimal                           @db.Decimal
+  totalAuthorizedAmount                   Decimal                           @db.Decimal
+  subtotalNetAmount                     Decimal                           @db.Decimal
+  subtotalGrossAmount                   Decimal                           @db.Decimal
+  voucher                               Voucher?                          @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  voucherId                             String?                           @map("voucher_id")
+  voucherCode                           String?                           @db.VarChar(255)
+  giftCards                             GiftCard[]                        @relation(name: "OrderToGiftCard")
+  displayGrossPrices                    Boolean                           @default(true)
+  customerNote                          String                            @default("") @db.Text
+  weight                                Float
+  redirectUrl                           String?                           @db.VarChar
+  searchDocument                        String                            @default("") @db.Text
+  searchVector                          String?                           @db.Text
+  shouldRefreshPrices                   Boolean                           @default(true)
+  taxExemption                          Boolean                           @default(false)
+  taxError                              String?                           @db.VarChar(256)
+  lines                               OrderLine[]                       
+  fulfillments                          Fulfillment[]                     
+  events                                OrderEvent[]                      
+  grantedRefunds                        OrderGrantedRefund[]              
+  payments                              Payment[]                         
+
+  @@map("order_order")
+  @@index([createdAt], name: "idx_order_created_at")
+  @@index([number])
+  @@index([checkoutToken], name: "checkout_token_btree_idx")
+  @@index([linesCount], name: "lines_count_idx")
+  @@index([totalGrossAmount], name: "order_totalgrossamount_idx")
+  @@index([totalNetAmount], name: "order_totalnetamount_idx")
+  @@index([status], name: "order_status_idx")
+  @@index([authorizeStatus])
+  @@index([chargeStatus])
+  @@index([voucherCode], type: Gin, name: "order_voucher_code_idx")
+  @@index([userEmail, userId], type: Gin, name: "order_user_email_user_id_idx")
+}
+
+model OrderLine {
+  id                             String                @id @default(uuid())
+  oldId                          Int?                  @unique
+  createdAt                      DateTime              @default(now())
+  order                          Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId                        String                @map("order_id")
+  variant                        ProductVariant?       @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  variantId                      String?               @map("variant_id")
+  productName                    String                @db.VarChar(386)
+  variantName                    String                @default("") @db.VarChar(255)
+  translatedProductName          String                @default("") @db.VarChar(386)
+  translatedVariantName          String                @default("") @db.VarChar(255)
+  productSku                     String?               @db.VarChar(255)
+  productVariantId               String?               @db.VarChar(255)
+  productTypeId                  Int?     
+  isShippingRequired             Boolean
+  isGiftCard                     Boolean
+  quantity                       Int
+  quantityFulfilled              Int                   @default(0)
+  isGift                         Boolean               @default(false)
+  currency                       String                @db.VarChar(3)
+  unitDiscountAmount             Decimal               @db.Decimal
+  unitDiscountType               String?               @db.VarChar(10)
+  unitDiscountReason             String?               @db.Text
+  unitDiscountValue              Decimal               @default(0.0) @db.Decimal
+  unitPriceNetAmount             Decimal               @db.Decimal
+  unitPriceGrossAmount           Decimal               @db.Decimal
+  totalPriceNetAmount            Decimal               @db.Decimal
+  totalPriceGrossAmount          Decimal               @db.Decimal
+  undiscountedUnitPriceGrossAmount Decimal               @default(0.0) @db.Decimal
+  undiscountedUnitPriceNetAmount   Decimal               @default(0.0) @db.Decimal
+  undiscountedTotalPriceGrossAmount Decimal               @default(0.0) @db.Decimal
+  undiscountedTotalPriceNetAmount  Decimal               @default(0.0) @db.Decimal
+  baseUnitPriceAmount            Decimal               @default(0.0) @db.Decimal
+  undiscountedBaseUnitPriceAmount   Decimal               @default(0.0) @db.Decimal
+  taxRate                        Decimal?              @db.Decimal
+  taxClass                       TaxClass?             @relation(fields: [taxClassId], references: [id], onDelete: SetNull)
+  taxClassId                     String?               @map("tax_class_id")
+  taxClassName                   String?               @db.VarChar(255)
+  taxClassPrivateMetadata        Json                  @default("{}") @db.Json
+  taxClassMetadata               Json                  @default("{}") @db.Json
+  isPriceOverridden              Boolean?
+  voucherCode                    String?               @db.VarChar(255)
+  saleId                         String?               @db.VarChar(255)
+  draftBasePriceExpireAt         DateTime?             @db.Timestamp
+  fulfillmentLines               FulfillmentLine[]    
+  grantedRefundLines             OrderGrantedRefundLine[]
+
+  @@map("order_orderline")
+  @@index([productTypeId], name: "product_type_id_btree_idx")
+}
+
+model Fulfillment {
+  fulfillmentOrder Int               
+  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId          String            @map("order_id")
+  status           String            @default("FULFILLED")
+  trackingNumber   String            @default("") @db.VarChar(255)
+  createdAt        DateTime          @default(now())
+  shippingRefundAmount Decimal?          @db.Decimal
+  totalRefundAmount    Decimal?          @db.Decimal
+  lines            FulfillmentLine[] 
+
+  @@map("order_fulfillment")
+  @@id([orderId, fulfillmentOrder])
+  @@index([status], name: "fulfillment_status_idx")
+}
+
+model FulfillmentLine {
+  orderLine   OrderLine @relation(fields: [orderlineId], references: [id], onDelete: Cascade)
+  orderlineId String    @map("order_line_id")
+  fulfillment Fulfillment @relation(fields: [orderId, fulfillmentOrder], references: [orderId, fulfillmentOrder], onDelete: Cascade)
+  orderId String
+  fulfillmentOrder Int
+  quantity    Int
+  stock       Stock?    @relation(fields: [stockId], references: [id], onDelete: SetNull)
+  stockId     String?   @map("stock_id")
+
+  @@map("order_fulfillmentline")
+  @@id([orderlineId, orderId, fulfillmentOrder])
+}
+
+model OrderEvent {
+  date       DateTime @default(now())
+  type       String   @db.VarChar(255)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String   @map("order_id")
+  parameters Json     @default("{}") @db.Json
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull, name: "order_event_user")
+  userId     String?  @map("user_id")
+  app        App?     @relation(fields: [appId], references: [id], onDelete: SetNull, name: "order_event_app")
+  appId      String?  @map("app_id")
+  relatedId  String?  @map("related_id")
+  related    OrderEvent? @relation(
+    fields: [relatedId],
+    references: [id],
+    onDelete: SetNull,
+    name: "OrderEventToOrderEvent"
+  )
+  relatedEvents OrderEvent[] @relation(
+    name: "OrderEventToOrderEvent"
+  )
+  id         String   @id @default(uuid())
+
+  @@map("order_orderevent")
+  @@index([relatedId], name: "order_orderevent_related_id_idx")
+  @@index([type])
+  @@index([date], name: "order_orderevent_date_idx")
+}
+
+model OrderGrantedRefund {
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt @db.Timestamp
+  amountValue         Decimal                   @default(0) @db.Decimal
+  currency            String                    @db.VarChar(3)
+  reason              String                    @default("") @db.Text
+  user                User?                     @relation(fields: [userId], references: [id], onDelete: SetNull, name: "order_granted_refund_user")
+  userId              String?                   @map("user_id")
+  app                 App?                      @relation(fields: [appId], references: [id], onDelete: SetNull, name: "order_granted_refund_app")
+  appId               String?                   @map("app_id")
+  order               Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId             String                    @map("order_id")
+  shippingCostsIncluded Boolean                   @default(false)
+  transactionItem     TransactionItem?          @relation(fields: [transactionItemId], references: [id], onDelete: SetNull)
+  transactionItemId   String?                   @map("transaction_item_id")
+  status              String                    @default("NONE") @db.VarChar(128)
+  lines               OrderGrantedRefundLine[]  
+  id                  String                    @id @default(uuid())
+
+  @@map("order_ordergrantedrefund")
+}
+
+model OrderGrantedRefundLine {
+  orderLine      OrderLine          @relation(fields: [orderlineId], references: [id], onDelete: Cascade)
+  orderlineId    String             @map("order_line_id")
+  quantity       Int
+  grantedRefund  OrderGrantedRefund @relation(fields: [grantedRefundId], references: [id], onDelete: Cascade)
+  grantedRefundId String             @map("granted_refund_id")
+  reason         String?            @db.Text
+  id             String             @id @default(uuid())
+
+  @@map("order_ordergrantedrefundline")
+}
+
+model User {
+  id String @id @default(uuid())
+  orders Order[]
+  order_event_user OrderEvent[] @relation("order_event_user")
+  order_granted_refund_user OrderGrantedRefund[] @relation("order_granted_refund_user")
+}
+
+model Address {
+  id String @id @default(uuid())
+  shipping_address Order[] @relation("shipping_address")
+  billing_address Order[] @relation("billing_address")
+}
+
+model ShippingMethod {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model Warehouse {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model TaxClass {
+  id String @id @default(uuid())
+  orders Order[]
+  orderLines OrderLine[]
+}
+
+model Voucher {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model GiftCard {
+  id String @id @default(uuid())
+  orders Order[] @relation(name: "OrderToGiftCard")
+}
+
+model ProductVariant {
+  id String @id @default(uuid())
+  order_lines OrderLine[]
+}
+
+model App {
+  id String @id @default(uuid())
+  order_event_app OrderEvent[] @relation("order_event_app")
+  order_granted_refund_app OrderGrantedRefund[] @relation("order_granted_refund_app")
+}
+
+model Channel {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model Payment {
+  id String @id @default(uuid())
+  order Order @relation(fields: [orderId], references: [id])
+  orderId String @map("order_id")
+}
+
+model TransactionItem {
+  id String @id @default(uuid())
+  granted_refund OrderGrantedRefund[]
+}
+
+model Stock {
+  id String @id @default(uuid())
+  fulfillment_lines FulfillmentLine[]
+}
+
+
+
+// --- page.prisma ---
+
+model Page {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique @db.VarChar(255)
+  title       String   @db.VarChar(250)
+  pageTypeId  Int
+  pageType    PageType @relation(fields: [pageTypeId], references: [id])
+  content     Json?   
+  createdAt   DateTime @default(now()) @db.DateTime(6)
+  metadata    Json?   
+  privateMetadata Json?
+  isPublished Boolean  @default(false)
+  translations PageTranslation[]
+
+  @@index([createdAt])
+  @@index([title, slug], type: Gin)
+  @@map("Page")
+}
+
+model PageTranslation {
+  id           Int      @id @default(autoincrement())
+  languageCode String
+  pageId       Int
+  page         Page     @relation(fields: [pageId], references: [id])
+  title        String?  @db.VarChar(255)
+  content      Json?
+  seoTitle     String?  @db.VarChar(70)
+  seoDescription String? @db.VarChar(300)
+  slug         String?  @db.VarChar(255)
+
+  @@unique([languageCode, slug], map: "uniq_lang_slug_pagetransl")
+  @@unique([languageCode, pageId])
+  @@index([languageCode, pageId])
+  @@map("PageTranslation")
+}
+
+model PageType {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(250)
+  slug        String   @unique @db.VarChar(255)
+  metadata    Json?
+  privateMetadata Json?
+  pages       Page[]
+
+  @@index([name, slug], type: Gin)
+  @@map("PageType")
+}
+
+// --- payment.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TransactionItem {
+  id                    Int       @id @default(autoincrement())
+  token                 String    @unique @default(uuid())
+  use_old_id            Boolean   @default(false)
+  created_at            DateTime  @default(now())
+  modified_at           DateTime  @updatedAt
+  idempotency_key       String?   @map("idempotency_key")
+  name                  String?   @default("")
+  message               String?   @default("")
+  psp_reference         String?   @map("psp_reference")
+  available_actions     String[]
+  currency              String    @map("currency")
+  charged_value         Decimal   @map("charged_value")
+  authorized_value      Decimal   @map("authorized_value")
+  refunded_value        Decimal   @map("refunded_value")
+  canceled_value        Decimal   @map("canceled_value")
+  refund_pending_value  Decimal   @map("refund_pending_value")
+  charge_pending_value  Decimal   @map("charge_pending_value")
+  authorize_pending_value Decimal   @map("authorize_pending_value")
+  cancel_pending_value  Decimal   @map("cancel_pending_value")
+  external_url          String?   @map("external_url")
+  checkoutId            Int?      @map("checkout_id")
+  checkout              Checkout? @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  orderId               Int?      @map("order_id")
+  order                 Order?    @relation(fields: [orderId], references: [id], onDelete: Protect)
+  userId                Int?      @map("user_id")
+  user                  User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appId                 Int?      @map("app_id")
+  app                   App?      @relation(fields: [appId], references: [id], onDelete: SetNull)
+  app_identifier        String?   @map("app_identifier")
+  last_refund_success   Boolean   @default(true)
+  cc_first_digits       String?   @map("cc_first_digits")
+  cc_last_digits        String?   @map("cc_last_digits")
+  cc_brand              String?   @map("cc_brand")
+  cc_exp_month          Int?      @map("cc_exp_month")
+  cc_exp_year           Int?      @map("cc_exp_year")
+  payment_method_type   String?   @map("payment_method_type")
+  payment_method_name   String?   @map("payment_method_name")
+  events                TransactionEvent[]
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+
+  @@index([payment_method_type], map: "payment_method_type_ids")
+  @@index([cc_brand], map: "cc_brand_idx")
+  @@unique([app_identifier, idempotency_key], map: "unique_transaction_idempotency")
+  @@map("payment_transactionitem")
+}
+
+model TransactionEvent {
+  id                    Int          @id @default(autoincrement())
+  created_at            DateTime     @default(now())
+  idempotency_key       String?      @map("idempotency_key")
+  psp_reference         String?      @map("psp_reference")
+  message               String?      @default("")
+  transactionId         Int          @map("transaction_id")
+  transaction           TransactionItem @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  external_url          String?      @map("external_url")
+  currency              String       @map("currency")
+  type                  String       @default("info")
+  amount_value          Decimal      @map("amount_value")
+  userId                Int?         @map("user_id")
+  user                  User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appId                 Int?         @map("app_id")
+  app                   App?         @relation(fields: [appId], references: [id], onDelete: SetNull)
+  app_identifier        String?      @map("app_identifier")
+  include_in_calculations Boolean @default(false)
+  related_granted_refundId Int? @map("related_granted_refund_id")
+  related_granted_refund OrderGrantedRefund? @relation(fields: [related_granted_refundId], references: [id], onDelete: SetNull)
+
+  @@unique([transactionId, idempotency_key], map: "unique_transaction_event_idempotency")
+  @@map("payment_transactionevent")
+}
+
+model Payment {
+  id                 Int       @id @default(autoincrement())
+  gateway          String    @map("gateway")
+  is_active        Boolean   @default(true)
+  to_confirm       Boolean   @default(false)
+  partial          Boolean   @default(false)
+  created_at       DateTime  @default(now())
+  modified_at      DateTime  @updatedAt
+  charge_status    String    @default("not_charged")
+  token            String    @default("")
+  total            Decimal   @default(0.0)
+  captured_amount  Decimal   @default(0.0)
+  currency         String    @map("currency")
+  checkoutId       Int?      @map("checkout_id")
+  checkout         Checkout? @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  orderId          Int?      @map("order_id")
+  order            Order?    @relation(fields: [orderId], references: [id], onDelete: Protect)
+  store_payment_method String    @default("none")
+  billing_email      String?   @map("billing_email")
+  billing_first_name String?   @map("billing_first_name")
+  billing_last_name  String?   @map("billing_last_name")
+  billing_company_name String?   @map("billing_company_name")
+  billing_address_1  String?   @map("billing_address_1")
+  billing_address_2  String?   @map("billing_address_2")
+  billing_city       String?   @map("billing_city")
+  billing_city_area  String?   @map("billing_city_area")
+  billing_postal_code String?   @map("billing_postal_code")
+  billing_country_code String?   @map("billing_country_code")
+  billing_country_area String?   @map("billing_country_area")
+  cc_first_digits    String    @default("")
+  cc_last_digits     String    @default("")
+  cc_brand           String    @default("")
+  cc_exp_month       Int?      @map("cc_exp_month")
+  cc_exp_year        Int?      @map("cc_exp_year")
+  payment_method_type String?   @map("payment_method_type")
+  customer_ip_address String?   @map("customer_ip_address")
+  extra_data         String    @default("")
+  return_url         String?   @map("return_url")
+  psp_reference      String?   @map("psp_reference") @db.Index
+  transactions     Transaction[]
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+
+  @@index([orderId, is_active, charge_status], map: "order_id_is_active_charge_status")
+  @@map("payment_payment")
+}
+
+model Transaction {
+  id                        Int      @id @default(autoincrement())
+  created_at                DateTime @default(now())
+  paymentId                 Int      @map("payment_id")
+  payment                   Payment  @relation(fields: [paymentId], references: [id], onDelete: Protect)
+  token                     String   @default("")
+  kind                      String   @map("kind")
+  is_success                Boolean  @default(false)
+  action_required           Boolean  @default(false)
+  action_required_data      Json     @map("action_required_data")
+  currency                  String   @map("currency")
+  amount                    Decimal  @default(0.0)
+  error                     String?  @map("error")
+  customer_id               String?  @map("customer_id")
+  gateway_response          Json     @map("gateway_response")
+  already_processed         Boolean  @default(false)
+  legacy_adyen_plugin_result_code String? @map("legacy_adyen_plugin_result_code")
+  legacy_adyen_plugin_payment_method String? @map("legacy_adyen_plugin_payment_method")
+
+  @@index([token], map: "token_idx")
+  @@map("payment_transaction")
+}
+
+model Checkout {
+  id Int @id @default(autoincrement())
+  payment_transactions TransactionItem[] @relation(name: "CheckoutToTransactionItem")
+  payments Payment[] @relation(name: "CheckoutToPayment")
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  payment_transactions TransactionItem[] @relation(name: "OrderToTransactionItem")
+  payments Payment[] @relation(name: "OrderToPayment")
+}
+
+model User {
+  id Int @id @default(autoincrement())
+  transactionItems TransactionItem[]
+  transactionEvents TransactionEvent[]
+}
+
+model App {
+  id Int @id @default(autoincrement())
+  transactionItems TransactionItem[]
+  transactionEvents TransactionEvent[]
+}
+
+model OrderGrantedRefund {
+  id Int @id @default(autoincrement())
+  transaction_events TransactionEvent[]
+}
+
+model Metadata {
+  id                  Int       @id @default(autoincrement())
+  key                 String
+  value               String
+  transactionItemId   Int?      @map("transaction_item_id")
+  transactionItem   TransactionItem? @relation(fields: [transactionItemId], references: [id])
+  paymentId   Int?      @map("payment_id")
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  @@map("core_metadata")
+}
+
+model PrivateMetadata {
+  id                  Int       @id @default(autoincrement())
+  key                 String
+  value               String
+  transactionItemId   Int?      @map("transaction_item_id")
+  transactionItem   TransactionItem? @relation(fields: [transactionItemId], references: [id])
+  paymentId   Int?      @map("payment_id")
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  @@map("core_privatemetadata")
+}
+
+// --- permission.prisma ---
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Permission {
+  id             Int      @id @default(autoincrement())
+  name           String   @db.VarChar(255)
+  contentTypeId  Int      @map("content_type_id")
+  codename       String   @db.VarChar(100)
+  contentType    ContentType @relation(fields: [contentTypeId], references: [id], onDelete: Cascade, map: "permission_content_type_id_fkey")
+  user_set       Account[]
+
+  @@unique([contentTypeId, codename], name: "permission_content_type_id_codename_key")
+  @@map("auth_permission")
+}
+
+model ContentType {
+  id        Int      @id @default(autoincrement())
+  appLabel  String   @map("app_label") @db.VarChar(100)
+  model     String   @db.VarChar(100)
+  permission Permission[]
+
+  @@unique([appLabel, model], name: "content_type_app_label_model_key")
+  @@map("django_content_type")
+}
+
+model Account {
+  id              Int         @id @default(autoincrement())
+  isSuperuser     Boolean     @default(false) @map("is_superuser")
+  groups          Group[]     @relation("AccountToGroup")
+  userPermissions Permission[] @relation("AccountToPermission")
+}
+
+model Group {
+  id      Int       @id @default(autoincrement())
+  account Account[] @relation("AccountToGroup")
+
+  @@map("account_group")
+}
+
+
+// --- plugins.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PluginConfiguration {
+  id              Int             @id @default(autoincrement())
+  identifier      String          @default("") @db.VarChar(128)
+  name            String          @default("") @db.VarChar(128)
+  channelId       Int?            @map("channel")
+  channel         Channel?        @relation(fields: [channelId], references: [id])
+  description     String          @default("") @db.Text
+  active          Boolean         @default(false)
+  configuration   Json            @default(Json({}))
+  email_templates EmailTemplate[]
+
+  @@unique([identifier, channelId], name: "plugin_configuration_identifier_channel_key")
+  @@map("plugin_pluginconfiguration")
+}
+
+model EmailTemplate {
+  id                    Int                 @id @default(autoincrement())
+  plugin_configurationId Int                 @map("plugin_configuration")
+  plugin_configuration  PluginConfiguration @relation(fields: [plugin_configurationId], references: [id], name: "email_templates")
+  name                  String              @db.VarChar(255)
+  value                 String              @db.Text
+
+  @@map("plugin_emailtemplate")
+}
+
+model Channel {
+  id                    Int                 @id @default(autoincrement())
+  PluginConfiguration PluginConfiguration[]
+
+  @@map("channel_channel")
+}
+
+// --- product.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id                    String                  @id @default(uuid())
+  name                  String                  @db.VarChar(250)
+  slug                  String                  @unique @db.VarChar(255)
+  description           Json?                   @db.Json
+  description_plaintext String?                 @db.Text
+  updated_at            DateTime?               @db.Timestamptz(6)
+  parentId              String?                 @map("parent_id")
+  parent                Category?               @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: Cascade, map: "category_parent_id_fkey")
+  children              Category[]              @relation("CategoryToCategory")
+  backgroundImage       String?                 @db.VarChar(100)
+  backgroundImageAlt    String?                 @db.VarChar(128)
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+  products              Product[]
+  translations          CategoryTranslation[]
+
+  @@index([updated_at], name: "updated_at_idx")
+  @@index([name, slug, description_plaintext], name: "category_search_name_slug_gin", type: Gin)
+  @@map("product_category")
+}
+
+model CategoryTranslation {
+  id            String  @id @default(uuid())
+  languageCode  String  @map("language_code")
+  categoryId    String  @map("category_id")
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Cascade, map: "product_categorytranslation_category_id_fkey")
+  name          String? @db.VarChar(128)
+  slug          String?
+  description   Json?   @db.Json
+
+  @@unique([languageCode, categoryId], name: "product_categorytranslation_language_code_category_id_key")
+  @@unique([languageCode, slug], name: "uniq_lang_slug_categorytransl")
+  @@map("product_categorytranslation")
+}
+
+model ProductType {
+  id                String    @id @default(uuid())
+  name              String    @db.VarChar(250)
+  slug              String    @unique @db.VarChar(255)
+  kind              String    @db.VarChar(32)
+  hasVariants       Boolean   @default(true)
+  isShippingRequired Boolean   @default(true)
+  isDigital         Boolean   @default(false)
+  weight          Float     @default(0)
+  weightUnit        String  @default("lb")
+  taxClassId        String?   @map("tax_class_id")
+  tax_class       TaxClass? @relation(fields: [taxClassId], references: [id], onDelete: SetNull, map: "product_producttype_tax_class_id_fkey")
+  metadata        Metadata[]
+  privateMetadata PrivateMetadata[]
+  products        Product[]
+
+  @@index([name, slug], name: "product_type_search_gin", type: Gin)
+  @@map("product_producttype")
+}
+
+model Product {
+  id                   String                  @id @default(uuid())
+  productTypeId        String                  @map("product_type_id")
+  productType          ProductType             @relation(fields: [productTypeId], references: [id], onDelete: Cascade, map: "product_product_product_type_id_fkey")
+  name                 String                  @db.VarChar(250)
+  slug                 String                  @unique @db.VarChar(255)
+  description          Json?                   @db.Json
+  description_plaintext String?                 @db.Text
+  search_document      String                  @default("") @db.Text
+  search_vector        String?                 @db.Text
+  search_index_dirty   Boolean                 @default(false)
+  categoryId           String?                 @map("category_id")
+  category             Category?               @relation(fields: [categoryId], references: [id], onDelete: SetNull, map: "product_product_category_id_fkey")
+  createdAt            DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+  weight          Float?                 
+  weightUnit        String? 
+  defaultVariantId     String?                 @unique @map("default_variant_id")
+  defaultVariant       ProductVariant?         @relation("ProductToProductVariant", fields: [defaultVariantId], references: [id], onDelete: SetNull, map: "product_product_default_variant_id_fkey")
+  rating               Float?                  
+  taxClassId           String?                 @map("tax_class_id")
+  tax_class          TaxClass?               @relation(fields: [taxClassId], references: [id], onDelete: SetNull, map: "product_product_tax_class_id_fkey")
+  metadata             Metadata[]
+  privateMetadata      PrivateMetadata[]
+  externalReference    ExternalReference[]
+  variants             ProductVariant[]
+  media                ProductMedia[]
+  channelListings      ProductChannelListing[]
+  collections          Collection[]            @relation(through: CollectionProduct)
+  translations         ProductTranslation[]
+  collectionProduct    CollectionProduct[]
+
+  @@index([search_document], name: "product_search_gin", type: Gin)
+  @@index([search_vector], name: "product_tsearch", type: Gin)
+  @@index([name, slug], name: "product_gin", type: Gin)
+  @@index([categoryId, slug])
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("product_product")
+}
+
+model ProductTranslation {
+  id            String  @id @default(uuid())
+  languageCode  String  @map("language_code")
+  productId     String  @map("product_id")
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_producttranslation_product_id_fkey")
+  name          String? @db.VarChar(250)
+  slug          String?
+  description   Json?   @db.Json
+
+  @@unique([languageCode, productId], name: "product_producttranslation_language_code_product_id_key")
+  @@unique([languageCode, slug], name: "uniq_lang_slug_producttransl")
+  @@map("product_producttranslation")
+}
+
+model ProductChannelListing {
+  id                      String    @id @default(uuid())
+  productId               String    @map("product_id")
+  product                 Product   @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_productchannellisting_product_id_fkey")
+  channelId               String    @map("channel_id")
+  channel                 Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade, map: "product_productchannellisting_channel_id_fkey")
+  visibleInListings       Boolean   @default(false)
+  availableForPurchaseAt  DateTime? @map("available_for_purchase_at") @db.Timestamptz(6)
+  currency                String    @db.VarChar(3)
+  discountedPriceAmount Decimal?  @map("discounted_price_amount") @db.Decimal
+  publishedAt             DateTime? @map("published_at") @db.Timestamptz(6)
+  isPublished             Boolean   @default(false) @map("is_published")
+  publicationToken        String?   @map("publication_token")
+  discounted_price_dirty  Boolean   @default(false)
+
+  @@unique([productId, channelId], name: "product_productchannellisting_product_id_channel_id_key")
+  @@index([publishedAt])
+  @@index([discountedPriceAmount])
+  @@map("product_productchannellisting")
+}
+
+model ProductVariant {
+  id                       String                         @id @default(uuid())
+  sku                      String?                        @unique @db.VarChar(255)
+  name                     String                         @db.VarChar(255)
+  productId                String                         @map("product_id")
+  product                  Product                        @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_productvariant_product_id_fkey")
+  media                    ProductMedia[]                 @relation(through: VariantMedia)
+  trackInventory           Boolean                        @default(true)
+  isPreorder               Boolean                        @default(false)
+  preorderEndDate          DateTime?                      @map("preorder_end_date") @db.Timestamptz(6)
+  preorderGlobalThreshold  Int?                           @map("preorder_global_threshold")
+  quantityLimitPerCustomer Int?                           @map("quantity_limit_per_customer")
+  createdAt                DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  weight          Float?                         
+  weightUnit        String?
+  sortOrder                Int                            @default(0) @map("sort_order")
+  metadata                 Metadata[]
+  privateMetadata          PrivateMetadata[]
+  externalReference        ExternalReference[]
+  translations             ProductVariantTranslation[]
+  channelListings          ProductVariantChannelListing[]
+  digitalContent           DigitalContent?
+  Product                  Product?                       @relation("ProductToProductVariant")
+  variant_media            VariantMedia[]
+
+  @@index([name, sku], name: "variant_gin", type: Gin)
+  @@index([createdAt])
+  @@index([updatedAt])
+  @@map("product_productvariant")
+}
+
+model ProductVariantTranslation {
+  id              String        @id @default(uuid())
+  languageCode    String        @map("language_code")
+  productVariantId String        @map("product_variant_id")
+  productVariant  ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade, map: "product_productvarianttranslation_product_variant_id_fkey")
+  name            String?       @db.VarChar(255)
+
+  @@unique([languageCode, productVariantId], name: "product_productvarianttranslation_language_code_product_variant_id_key")
+  @@map("product_productvarianttranslation")
+}
+
+model ProductVariantChannelListing {
+  id                         String                           @id @default(uuid())
+  variantId                  String                           @map("variant_id")
+  variant                    ProductVariant                   @relation(fields: [variantId], references: [id], onDelete: Cascade, map: "product_productvariantchannellisting_variant_id_fkey")
+  channelId                  String                           @map("channel_id")
+  channel                    Channel                          @relation(fields: [channelId], references: [id], onDelete: Cascade, map: "product_productvariantchannellisting_channel_id_fkey")
+  currency                   String                           @db.VarChar(3)
+  priceAmount          Decimal?                         @map("price_amount") @db.Decimal
+  costPriceAmount      Decimal?                       @map("cost_price_amount") @db.Decimal
+  priorPriceAmount     Decimal?                     @map("prior_price_amount") @db.Decimal
+  discountedPriceAmount Decimal?                         @map("discounted_price_amount") @db.Decimal
+  promotion_rules            VariantChannelListingPromotionRule[]
+  preorderQuantityThreshold  Int?                             @map("preorder_quantity_threshold")
+
+  @@unique([variantId, channelId], name: "product_productvariantchannellisting_variant_id_channel_id_key")
+  @@index([priceAmount, channelId], name: "product_productvariantchannellisting_price_amount_channel_id_idx", type: Gin)
+  @@map("product_productvariantchannellisting")
+}
+
+
+model VariantChannelListingPromotionRule {
+  id                      String                     @id @default(uuid())
+  variantChannelListingId String                     @map("variant_channel_listing_id")
+  variantChannelListing   ProductVariantChannelListing @relation(fields: [variantChannelListingId], references: [id], onDelete: Cascade, map: "product_variantchannellistingpromotionrule_variant_channel_listing_id_fkey")
+  promotionRuleId         String                     @map("promotion_rule_id")
+  promotion_rule            PromotionRule               @relation(fields: [promotionRuleId], references: [id], onDelete: Cascade, map: "product_variantchannellistingpromotionrule_promotion_rule_id_fkey")
+  discountAmount          Decimal                    @default(0) @map("discount_amount") @db.Decimal
+  currency                String                     @db.VarChar(3)
+
+  @@unique([variantChannelListingId, promotionRuleId], name: "product_variantchannellistingpromotionrule_variant_channel_listing_id_promotion_rule_id_key")
+  @@map("product_variantchannellistingpromotionrule")
+}
+
+model DigitalContent {
+  id                  String         @id @default(uuid())
+  useDefaultSettings  Boolean        @default(true)
+  automaticFulfillment Boolean        @default(false)
+  contentType         String         @default("file") @db.VarChar(128)
+  productVariantId  String         @unique @map("product_variant_id")
+  productVariant    ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade, map: "product_digitalcontent_product_variant_id_fkey")
+  contentFile         String?        @db.VarChar(100)
+  maxDownloads        Int?           @map("max_downloads")
+  urlValidDays        Int?           @map("url_valid_days")
+  urls                DigitalContentUrl[]
+  metadata            Metadata[]
+  privateMetadata     PrivateMetadata[]
+
+  @@map("product_digitalcontent")
+}
+
+model DigitalContentUrl {
+  id        String   @id @default(uuid())
+  tokenId   String   @unique @map("token")
+  contentId String   @map("content_id")
+  content   DigitalContent @relation(fields: [contentId], references: [id], onDelete: Cascade, map: "product_digitalcontenturl_content_id_fkey")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  downloadNum Int @default(0) @map("download_num")
+  lineId String? @unique @map("line_id")
+
+  @@map("product_digitalcontenturl")
+}
+
+
+model ProductMedia {
+  id             String           @id @default(uuid())
+  productId      String?          @map("product_id")
+  product        Product?         @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_productmedia_product_id_fkey")
+  image          String?          @db.VarChar(100)
+  alt            String           @db.VarChar(250)
+  type           String           @default("image") @db.VarChar(32)
+  externalUrl    String?          @db.VarChar(256)
+  oembedData     Json             @default("{}") @db.Json
+  toRemove       Boolean          @default(false) @map("to_remove")
+  sortOrder      Int              @default(0) @map("sort_order")
+  variant_media  VariantMedia[]
+  metadata       Metadata[]
+  privateMetadata PrivateMetadata[]
+
+  @@map("product_productmedia")
+}
+
+model VariantMedia {
+  variantId String       @map("variant_id")
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade, map: "product_variantmedia_variant_id_fkey")
+  mediaId   String       @map("media_id")
+  media     ProductMedia   @relation(fields: [mediaId], references: [id], onDelete: Cascade, map: "product_variantmedia_media_id_fkey")
+
+  @@id([variantId, mediaId])
+  @@map("product_variantmedia")
+}
+
+model CollectionProduct {
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade, map: "product_collectionproduct_collection_id_fkey")
+  productId    String     @map("product_id")
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade, map: "product_collectionproduct_product_id_fkey")
+  sortOrder  Int        @default(0) @map("sort_order")
+
+  @@id([collectionId, productId])
+  @@map("product_collectionproduct")
+}
+
+model Collection {
+  id                    String                   @id @default(uuid())
+  name                  String                   @db.VarChar(250)
+  slug                  String                   @unique @db.VarChar(255)
+  backgroundImage       String?                  @db.VarChar(100)
+  backgroundImageAlt    String?                  @db.VarChar(128)
+  description           Json?                    @db.Json
+  metadata              Metadata[]
+  privateMetadata       PrivateMetadata[]
+  products              Product[]                @relation(through: CollectionProduct)
+  channelListings       CollectionChannelListing[]
+  translations          CollectionTranslation[]
+  collectionProduct    CollectionProduct[]
+
+  @@index([name, slug], name: "collection_search_gin", type: Gin)
+  @@map("product_collection")
+}
+
+
+model CollectionChannelListing {
+  id           String     @id @default(uuid())
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade, map: "product_collectionchannellisting_collection_id_fkey")
+  channelId    String     @map("channel_id")
+  channel      Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade, map: "product_collectionchannellisting_channel_id_fkey")
+  publishedAt  DateTime?  @map("published_at") @db.Timestamptz(6)
+  isPublished  Boolean    @default(false) @map("is_published")
+  publicationToken String?   @map("publication_token")
+
+  @@unique([collectionId, channelId], name: "product_collectionchannellisting_collection_id_channel_id_key")
+  @@map("product_collectionchannellisting")
+}
+
+model CollectionTranslation {
+  id           String     @id @default(uuid())
+  languageCode String     @map("language_code")
+  collectionId String     @map("collection_id")
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade, map: "product_collectiontranslation_collection_id_fkey")
+  name         String?    @db.VarChar(128)
+  slug          String?
+  description  Json?      @db.Json
+
+  @@unique([languageCode, collectionId], name: "product_collectiontranslation_language_code_collection_id_key")
+  @@unique([languageCode, slug], name: "uniq_lang_slug_collectiontransl")
+  @@map("product_collectiontranslation")
+}
+
+model Channel {
+  id                    String                  @id @default(uuid())
+  productListings       ProductChannelListing[]
+  variantListings       ProductVariantChannelListing[]
+  collectionListings    CollectionChannelListing[]
+}
+
+model TaxClass {
+  id            String        @id @default(uuid())
+  product_types ProductType[]
+  products      Product[]
+}
+
+model PromotionRule {
+  id String @id @default(uuid())
+  variantlistingpromotionrule       VariantChannelListingPromotionRule[]
+}
+
+model Metadata {
+  id String @id @default(uuid())
+  key String
+  value String
+}
+
+model PrivateMetadata {
+  id String @id @default(uuid())
+  key String
+  value String
+}
+
+model ExternalReference {
+    id String @id @default(uuid())
+    reference String
+    externalId String
+}
+
+// --- schedulers.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CustomSchedule {
+  id                  Int      @id @default(autoincrement())
+  schedule_import_path String   @unique @db.VarChar(255)
+  customPeriodTasks   CustomPeriodicTask[]
+}
+
+model CustomPeriodicTask {
+  id            Int       @id @default(autoincrement())
+  task          String    @db.VarChar(200)
+  name          String    @unique @db.VarChar(200)
+  regtask       String?   @db.VarChar(200)
+  taskType      String    @default("celery.task.Task") @map("task_type")
+  args          String    @default("[]")
+  kwargs        String    @default("{}")
+  queue         String?   @db.VarChar(200)
+  exchange      String?   @db.VarChar(200)
+  routing_key   String?   @db.VarChar(200)
+  priority      Int?      @default(0)
+  expires       DateTime? // Changed to DateTime? to match Django's behavior with null=True
+  enabled       Boolean   @default(true)
+  last_run_at   DateTime?
+  total_run_count Int       @default(0)
+  date_changed  DateTime
+  description   String
+  intervalId    Int?      @map("interval_id")
+  interval      Interval? @relation(fields: [intervalId], references: [id])
+  crontabId     Int?      @map("crontab_id")
+  crontab       Crontab?  @relation(fields: [crontabId], references: [id])
+  solarId       Int?      @map("solar_id")
+  solar         Solar?    @relation(fields: [solarId], references: [id])
+  clockedId     Int?      @map("clocked_id")
+  clocked       Clocked?  @relation(fields: [clockedId], references: [id])
+  one_off       Boolean   @default(false)
+  start_time    DateTime?
+  customId      Int?      @map("custom_id")
+  custom        CustomSchedule? @relation(fields: [customId], references: [id])
+  headers       String    @default("{}")
+  queue_override  String?   @db.VarChar(200) @map("queue_override")
+
+  @@index([intervalId])
+  @@index([crontabId])
+  @@index([solarId])
+  @@index([clockedId])
+  @@index([customId])
+  @@map("django_celery_beat_periodictask")
+}
+
+model Interval {
+  id            Int                @id @default(autoincrement())
+  every         Int
+  period        String             @db.VarChar(24)
+  periodictasks CustomPeriodicTask[]
+
+  @@unique([every, period])
+  @@map("django_celery_beat_intervalschedule")
+}
+
+model Crontab {
+  id            Int                @id @default(autoincrement())
+  minute        String             @db.VarChar(240)
+  hour          String             @db.VarChar(96)
+  day_of_week   String             @db.VarChar(64)
+  day_of_month  String             @db.VarChar(124)
+  month_of_year String             @db.VarChar(64)
+  periodictasks CustomPeriodicTask[]
+
+  @@map("django_celery_beat_crontabschedule")
+}
+
+model Solar {
+  id            Int                @id @default(autoincrement())
+  event         String             @db.VarChar(24)
+  latitude      Decimal            @db.Decimal(9, 6)
+  longitude     Decimal            @db.Decimal(9, 6)
+  periodictasks CustomPeriodicTask[]
+
+  @@unique([event, latitude, longitude])
+  @@map("django_celery_beat_solarschedule")
+}
+
+model Clocked {
+  id            Int                @id @default(autoincrement())
+  clocked_time  DateTime
+  timezone      String             @db.VarChar(63)
+  enabled       Boolean            @default(true)
+  periodictasks CustomPeriodicTask[]
+
+  @@map("django_celery_beat_clockedschedule")
+}
+
+
+// --- seo.prisma ---
+
+model SeoModel {
+  seo_title     String?   @db.VarChar(70)
+  seo_description String?   @db.VarChar(300)
+
+  @@abstract
+}
+
+model SeoModelTranslation {
+  id            Int      @id @default(autoincrement())
+  languageCode  String   @db.VarChar(10)
+
+  seo_title     String?   @db.VarChar(70)
+  seo_description String?   @db.VarChar(300)
+
+  @@abstract
+}
+
+model SeoModelTranslationWithSlug {
+  id            Int      @id @default(autoincrement())
+  languageCode  String   @db.VarChar(10)
+
+  seo_title     String?   @db.VarChar(70)
+  seo_description String?   @db.VarChar(300)
+  slug          String?   @db.VarChar(255)
+
+  @@abstract
+}
+
+// --- shipping.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ShippingZone {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(100)
+  countries   String[] @db.Text
+  default     Boolean  @default(false)
+  description String   @db.Text @default("")
+  channels    Channel[] @relation("ShippingZoneToChannel")
+  shippingMethods ShippingMethod[]
+  metadata    Metadata[] @relation("ShippingZoneToMetadata")
+  privateMetadata PrivateMetadata[] @relation("ShippingZoneToPrivateMetadata")
+
+  @@index([countries], map: "s_z_countries_idx")
+}
+
+enum ShippingMethodType {
+  PRICE_BASED
+  WEIGHT_BASED
+}
+
+model ShippingMethod {
+  id                   Int                       @id @default(autoincrement())
+  name                 String                    @db.VarChar(100)
+  type                 ShippingMethodType        @db.VarChar(30)
+  shippingZoneId       Int
+  shippingZone         ShippingZone              @relation(fields: [shippingZoneId], references: [id])
+  minimumOrderWeight   Float?                    @map("minimum_order_weight")
+  minimumOrderWeightUnit String?                   @map("minimum_order_weight_unit")
+  maximumOrderWeight   Float?                    @map("maximum_order_weight")
+  maximumOrderWeightUnit String?                   @map("maximum_order_weight_unit")
+  excludedProducts   Product[] @relation("ShippingMethodToProduct")
+  maximumDeliveryDays  Int?                      @map("maximum_delivery_days")
+  minimumDeliveryDays  Int?                      @map("minimum_delivery_days")
+  description        Json?                      @db.Json
+  taxClassId         Int?                      @map("tax_class_id")
+  taxClass           TaxClass?                 @relation(fields: [taxClassId], references: [id])
+  channelListings    ShippingMethodChannelListing[]
+  postalCodeRules    ShippingMethodPostalCodeRule[]
+  translations       ShippingMethodTranslation[]
+  metadata    Metadata[] @relation("ShippingMethodToMetadata")
+  privateMetadata PrivateMetadata[] @relation("ShippingMethodToPrivateMetadata")
+
+  @@map("shipping_shippingmethod")
+}
+
+enum PostalCodeRuleInclusionType {
+  EXCLUDE
+  INCLUDE
+}
+
+model ShippingMethodPostalCodeRule {
+  id              Int                         @id @default(autoincrement())
+  shippingMethodId  Int
+  shippingMethod  ShippingMethod              @relation(fields: [shippingMethodId], references: [id])
+  start           String                      @db.VarChar(32)
+  end             String?                     @db.VarChar(32)
+  inclusionType   PostalCodeRuleInclusionType @default(EXCLUDE) @db.VarChar(32)
+
+  @@unique([shippingMethodId, start, end], map: "shipping_shippingmethodpostalcoderule_shipping_method_id_start_end_key")
+  @@map("shipping_shippingmethodpostalcoderule")
+}
+
+model ShippingMethodChannelListing {
+  id                      Int      @id @default(autoincrement())
+  shippingMethodId          Int
+  shippingMethod          ShippingMethod @relation(fields: [shippingMethodId], references: [id])
+  channelId               Int
+  channel               Channel @relation(fields: [channelId], references: [id])
+  minimumOrderPriceAmount Decimal? @db.Decimal
+  currency                String   @db.VarChar
+  maximumOrderPriceAmount Decimal? @db.Decimal
+  priceAmount             Decimal  @default(0) @db.Decimal
+
+  @@unique([shippingMethodId, channelId], map: "shipping_shippingmethodchannellisting_shipping_method_id_channel_id_key")
+  @@map("shipping_shippingmethodchannellisting")
+  @@ordering([
+
+// --- tax.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TaxClass {
+  id            Int                    @id @default(autoincrement())
+  name          String
+  countryRates  TaxClassCountryRate[]
+  metadata      Metadata[]             @relation("TaxClassMetadata")
+  privateMetadata PrivateMetadata[]  @relation("TaxClassPrivateMetadata")
+
+  @@map("tax_taxclass")
+  @@ignore
+}
+
+model TaxClassCountryRate {
+  id          Int       @id @default(autoincrement())
+  tax_class   TaxClass? @relation(fields: [tax_class_id], references: [id])
+  tax_class_id Int?      @map("tax_class_id")
+  country     String    @db.Text
+  rate        Decimal   @db.Decimal
+
+  @@map("tax_taxclasscountryrate")
+  @@unique([country, tax_class_id], map: "unique_country_tax_class")
+  @@unique([country], map: "unique_country_without_tax_class")
+  @@ignore
+}
+
+model TaxConfiguration {
+  id                         Int                        @id @default(autoincrement())
+  channel                    Channel                    @relation(fields: [channel_id], references: [id]) @unique
+  channel_id                 Int                        @map("channel_id")
+  charge_taxes               Boolean                    @default(true)
+  tax_calculation_strategy String?   @default("flat_rates") @map("tax_calculation_strategy")
+  display_gross_prices       Boolean                    @default(true)
+  prices_entered_with_tax  Boolean                    @default(true)
+  tax_app_id                 String?                    @map("tax_app_id")
+  use_weighted_tax_for_shipping Boolean                    @default(false) @map("use_weighted_tax_for_shipping")
+  country_exceptions         TaxConfigurationPerCountry[] 
+  metadata                   Metadata[]                 @relation("TaxConfigurationMetadata")
+  privateMetadata            PrivateMetadata[]          @relation("TaxConfigurationPrivateMetadata")
+
+  @@map("tax_taxconfiguration")
+  @@ignore
+}
+
+model TaxConfigurationPerCountry {
+  id                         Int             @id @default(autoincrement())
+  tax_configuration   TaxConfiguration @relation(fields: [tax_configuration_id], references: [id])
+  tax_configuration_id Int              @map("tax_configuration_id")
+  country                    String          @db.Text
+  charge_taxes               Boolean         @default(true)
+  tax_calculation_strategy String?       @map("tax_calculation_strategy")
+  display_gross_prices       Boolean         @default(true)
+  tax_app_id                 String?         @map("tax_app_id")
+  use_weighted_tax_for_shipping Boolean         @default(false) @map("use_weighted_tax_for_shipping")
+
+  @@map("tax_taxconfigurationpercountry")
+  @@unique([tax_configuration_id, country], map: "tax_taxconfigurationpercountry_tax_configuration_id_country_key")
+  @@ignore
+}
+
+model Channel {
+  id                Int                @id @default(autoincrement())
+  tax_configuration TaxConfiguration?
+
+  @@map("channel_channel")
+  @@ignore
+}
+
+model Metadata {
+    id Int @id @default(autoincrement())
+    key String
+    value String
+    taxClass   TaxClass? @relation(fields: [taxClassId], references: [id], name: "TaxClassMetadata")
+    taxClassId Int? @map("tax_class_id")
+    taxConfiguration   TaxConfiguration? @relation(fields: [taxConfigurationId], references: [id], name: "TaxConfigurationMetadata")
+    taxConfigurationId Int? @map("tax_configuration_id")
+    @@map("core_metadata")
+    @@ignore
+}
+
+model PrivateMetadata {
+    id Int @id @default(autoincrement())
+    key String
+    value String
+    taxClass   TaxClass? @relation(fields: [taxClassId], references: [id], name: "TaxClassPrivateMetadata")
+    taxClassId Int? @map("tax_class_id")
+    taxConfiguration   TaxConfiguration? @relation(fields: [taxConfigurationId], references: [id], name: "TaxConfigurationPrivateMetadata")
+    taxConfigurationId Int? @map("tax_configuration_id")
+
+    @@map("core_privatemetadata")
+    @@ignore
+}
+
+
+// --- tests.prisma ---
+
+model Book {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(30)
+}
+
+
+// --- thumbnail.prisma ---
+
+model Thumbnail {
+  id               Int       @id @default(autoincrement())
+  image            String
+  size             Int       @validator(validate_thumbnail_size)
+  format           String?   
+  category         Category? @relation(fields: [categoryId], references: [id])
+  categoryId       Int?      @map("category_id")
+  collection       Collection? @relation(fields: [collectionId], references: [id])
+  collectionId     Int?      @map("collection_id")
+  product_media    ProductMedia? @relation(fields: [product_mediaId], references: [id])
+  product_mediaId  Int?      @map("product_media_id")
+  user             User? @relation(fields: [userId], references: [id])
+  userId           Int?      @map("user_id")
+  app              App? @relation(fields: [appId], references: [id])
+  appId            Int?      @map("app_id")
+  app_installation AppInstallation? @relation(fields: [appInstallationId], references: [id])
+  appInstallationId Int?      @map("app_installation_id")
+
+  @@index([categoryId])
+  @@index([collectionId])
+  @@index([product_mediaId])
+  @@index([userId])
+  @@index([appId])
+  @@index([appInstallationId])
+}
+
+model Category {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model Collection {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model ProductMedia {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model User {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model App {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model AppInstallation {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+// --- warehouse.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ChannelWarehouse {
+  id         Int      @id @default(autoincrement())
+  sort_order Int
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId Int
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId String   @db.Uuid
+
+  @@unique([channelId, warehouseId])
+  @@index([sort_order, id])
+}
+
+model Warehouse {
+  id                     String                     @id @default(uuid()) @db.Uuid
+  name                   String                   @db.VarChar(250)
+  slug                   String                   @unique @db.VarChar(255)
+  channels               ChannelWarehouse[]
+  shipping_zones         ShippingZone[]           @relation(name: "WarehouseToShippingZone")
+  address                Address                  @relation(fields: [addressId], references: [id], onDelete: Protect)
+  addressId              Int
+  email                  String                   @default("") @db.VarChar
+  click_and_collect_option String                   @default("DISABLED") @db.VarChar(30)
+  is_private             Boolean                  @default(true)
+  stocks                 Stock[]
+  metadata               Metadata[]               @relation(name: "WarehouseToMetadata")
+  privateMetadata        PrivateMetadata[]        @relation(name: "WarehouseToPrivateMetadata")
+  externalReference      ExternalReference?       @relation(name: "WarehouseToExternalReference")
+
+  @@index([click_and_collect_option], name: "click_and_collect_option_idx")
+  @@map("warehouse")
+}
+
+model Stock {
+  id              Int             @id @default(autoincrement())
+  warehouse       Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId     String          @db.Uuid
+  product_variant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  productVariantId Int
+  quantity        Int             @default(0)
+  quantity_allocated Int             @default(0)
+  allocations     Allocation[]
+  reservations    Reservation[]
+
+  @@unique([warehouseId, productVariantId])
+  @@map("stock")
+}
+
+model Allocation {
+  id              Int      @id @default(autoincrement())
+  order_line      OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+  orderLineId     Int
+  stock           Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId         Int
+  quantity_allocated Int      @default(0) @db.PositiveBigInt
+
+  @@unique([orderLineId, stockId])
+  @@map("allocation")
+}
+
+model PreorderAllocation {
+  id                          Int                         @id @default(autoincrement())
+  order_line                  OrderLine                   @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+  orderLineId                 Int
+  quantity                    Int                         @default(0) @db.PositiveBigInt
+  product_variant_channel_listing ProductVariantChannelListing @relation(fields: [productVariantChannelListingId], references: [id], onDelete: Cascade)
+  productVariantChannelListingId Int
+
+  @@unique([orderLineId, productVariantChannelListingId])
+  @@map("preorderallocation")
+}
+
+model PreorderReservation {
+  id                          Int                         @id @default(autoincrement())
+  checkout_line               CheckoutLine                @relation(fields: [checkoutLineId], references: [id], onDelete: Cascade)
+  checkoutLineId              Int
+  product_variant_channel_listing ProductVariantChannelListing @relation(fields: [productVariantChannelListingId], references: [id], onDelete: Cascade)
+  productVariantChannelListingId Int
+  quantity_reserved           Int                         @default(0) @db.PositiveBigInt
+  reserved_until              DateTime
+
+  @@unique([checkoutLineId, productVariantChannelListingId])
+  @@index([checkoutLineId, reserved_until])
+  @@map("preorderreservation")
+}
+
+model Reservation {
+  id             Int          @id @default(autoincrement())
+  checkout_line  CheckoutLine @relation(fields: [checkoutLineId], references: [id], onDelete: Cascade)
+  checkoutLineId Int
+  stock          Stock        @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId        Int
+  quantity_reserved Int          @default(0) @db.PositiveBigInt
+  reserved_until DateTime
+
+  @@unique([checkoutLineId, stockId])
+  @@index([checkoutLineId, reserved_until])
+  @@map("reservation")
+}
+
+model Channel {
+  id               Int                  @id @default(autoincrement())
+  warehouses       ChannelWarehouse[]
+  shippingZones    ShippingZone[]       @relation(name: "ChannelToShippingZone")
+
+  @@map("channel")
+}
+
+model ShippingZone {
+  id         Int           @id @default(autoincrement())
+  warehouses Warehouse[]   @relation(name: "WarehouseToShippingZone")
+  channels   Channel[]     @relation(name: "ChannelToShippingZone")
+
+  @@map("shippingzone")
+}
+
+model Address {
+  id        Int         @id @default(autoincrement())
+  warehouses Warehouse[]
+
+  @@map("address")
+}
+
+model OrderLine {
+  id          Int           @id @default(autoincrement())
+  allocations Allocation[]
+  preorder_allocations PreorderAllocation[]
+
+  @@map("orderline")
+}
+
+model CheckoutLine {
+  id                    Int                     @id @default(autoincrement())
+  preorder_reservations PreorderReservation[]
+  reservations          Reservation[]
+
+  @@map("checkoutline")
+}
+
+model ProductVariant {
+  id     Int     @id @default(autoincrement())
+  stocks Stock[]
+
+  @@map("productvariant")
+}
+
+model ProductVariantChannelListing {
+  id                       Int                      @id @default(autoincrement())
+  preorder_allocations     PreorderAllocation[]
+  preorder_reservations    PreorderReservation[]
+
+  @@map("productvariantchannellisting")
+}
+
+model Metadata {
+    id          Int     @id @default(autoincrement())
+    warehouse   Warehouse? @relation(name: "WarehouseToMetadata", fields: [warehouseId], references: [id])
+    warehouseId String?   @db.Uuid
+
+    @@map("metadata")
+}
+
+model PrivateMetadata {
+    id          Int     @id @default(autoincrement())
+    warehouse   Warehouse? @relation(name: "WarehouseToPrivateMetadata", fields: [warehouseId], references: [id])
+    warehouseId String?   @db.Uuid
+
+    @@map("privatemetadata")
+}
+
+model ExternalReference {
+    id          Int     @id @default(autoincrement())
+    warehouse   Warehouse? @relation(name: "WarehouseToExternalReference", fields: [warehouseId], references: [id])
+    warehouseId String?   @unique @db.Uuid
+
+    @@map("externalreference")
+}
+
+// --- webhook.prisma ---
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Webhook {
+  id                       Int      @id @default(autoincrement())
+  name                     String?  @map("name")
+  appId                    Int      @map("app_id")
+  app                      App      @relation(fields: [appId], references: [id], map: "webhooks")
+  target_url               String   @map("target_url")
+  is_active                Boolean  @default(true) @map("is_active")
+  secret_key               String?  @map("secret_key")
+  subscription_query       String?  @map("subscription_query")
+  custom_headers           Json?    @map("custom_headers")
+  filterable_channel_slugs String[] @default([]) @map("filterable_channel_slugs")
+  events                   WebhookEvent[]
+
+  @@map("webhook")
+  @@index([filterable_channel_slugs], type: Gin, name: "filterable_channel_slugs_idx")
+  @@ignore
+}
+
+model WebhookEvent {
+  id         Int     @id @default(autoincrement())
+  webhookId  Int     @map("webhook_id")
+  webhook    Webhook @relation(fields: [webhookId], references: [id], map: "events")
+  event_type String  @map("event_type") @db.VarChar(128)
+
+  @@map("webhookevent")
+  @@index([event_type])
+}
+
+model App {
+  id      Int       @id @default(autoincrement())
+  webhooks Webhook[]
+
+  @@map("app_app")
+}

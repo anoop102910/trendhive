@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model App {
+  id                  Int             @id @default(autoincrement())
+  uuid                String          @unique @default(uuid())
+  name                String          @db.VarChar(60)
+  createdAt           DateTime        @default(now())
+  isActive            Boolean         @default(true)
+  removedAt           DateTime?       @map("removed_at")
+  type                String          @default("LOCAL") @db.VarChar(60)
+  identifier          String          @db.VarChar(256)
+  permissions         Permission[]    @relation(name: "AppToPermission")
+  aboutApp            String?         @map("about_app")
+  dataPrivacy         String?         @map("data_privacy")
+  dataPrivacyUrl      String?         @map("data_privacy_url") @db.Text
+  homepageUrl         String?         @map("homepage_url") @db.Text
+  supportUrl          String?         @map("support_url") @db.Text
+  configurationUrl    String?         @map("configuration_url") @db.Text
+  appUrl              String?         @map("app_url") @db.Text
+  manifestUrl         String?         @map("manifest_url") @db.Text
+  version             String?         @db.VarChar(60)
+  audience            String?         @db.VarChar(256)
+  isInstalled         Boolean         @default(true)
+  author              String?         @db.VarChar(60)
+  brandLogoDefault    String?         @map("brand_logo_default") @db.Text
+  appToken            AppToken[]
+  appExtension        AppExtension[]
+  ModelWithMetadata   ModelWithMetadata @relation(fields: [modelWithMetadataId], references: [id])
+  modelWithMetadataId Int             @unique
+
+  @@map("app")
+  @@index([modelWithMetadataId], name: "app_modelwithmetadata_id_fkey")
+  @@index([name], name: "app_name_idx")
+  @@index([isActive], name: "app_is_active_idx")
+  @@index([removedAt], name: "app_removed_at_idx")
+}
+
+model AppToken {
+  id        Int    @id @default(autoincrement())
+  app       App    @relation(fields: [appId], references: [id])
+  appId     Int
+  name      String @default("") @db.VarChar(128)
+  authToken String @unique @db.VarChar(128)
+  tokenLast4 String @db.VarChar(4)
+
+  @@map("apptoken")
+  @@index([appId], name: "apptoken_app_id_fkey")
+}
+
+model AppExtension {
+  id              Int      @id @default(autoincrement())
+  app             App      @relation(fields: [appId], references: [id])
+  appId           Int
+  label           String   @db.VarChar(256)
+  url             String   @db.Text
+  mount           String   @db.VarChar(256)
+  target          String   @default("POPUP") @db.VarChar(128)
+  permissions     Permission[] @relation(name: "AppExtensionToPermission")
+  httpTargetMethod String?  @map("http_target_method")
+
+  @@map("appextension")
+  @@index([appId], name: "appextension_app_id_fkey")
+}
+
+model AppInstallation {
+  id             Int       @id @default(autoincrement())
+  uuid           String    @unique @default(uuid())
+  appName        String    @map("app_name") @db.VarChar(60)
+  manifestUrl    String    @map("manifest_url") @db.Text
+  permissions    Permission[] @relation(name: "AppInstallationToPermission")
+  brandLogoDefault String? @map("brand_logo_default") @db.Text
+
+  @@map("appinstallation")
+}
+
+
+model Permission {
+  id           Int            @id @default(autoincrement())
+  App          App[]          @relation(name: "AppToPermission")
+  AppExtension AppExtension[] @relation(name: "AppExtensionToPermission")
+  AppInstallation AppInstallation[] @relation(name: "AppInstallationToPermission")
+
+  @@map("permission")
+}
+
+model ModelWithMetadata {
+  id         Int      @id @default(autoincrement())
+  App        App?
+
+  @@map("modelwithmetadata")
+}

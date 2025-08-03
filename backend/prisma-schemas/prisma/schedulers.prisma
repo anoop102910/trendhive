@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CustomSchedule {
+  id                  Int      @id @default(autoincrement())
+  schedule_import_path String   @unique @db.VarChar(255)
+  customPeriodTasks   CustomPeriodicTask[]
+}
+
+model CustomPeriodicTask {
+  id            Int       @id @default(autoincrement())
+  task          String    @db.VarChar(200)
+  name          String    @unique @db.VarChar(200)
+  regtask       String?   @db.VarChar(200)
+  taskType      String    @default("celery.task.Task") @map("task_type")
+  args          String    @default("[]")
+  kwargs        String    @default("{}")
+  queue         String?   @db.VarChar(200)
+  exchange      String?   @db.VarChar(200)
+  routing_key   String?   @db.VarChar(200)
+  priority      Int?      @default(0)
+  expires       DateTime? // Changed to DateTime? to match Django's behavior with null=True
+  enabled       Boolean   @default(true)
+  last_run_at   DateTime?
+  total_run_count Int       @default(0)
+  date_changed  DateTime
+  description   String
+  intervalId    Int?      @map("interval_id")
+  interval      Interval? @relation(fields: [intervalId], references: [id])
+  crontabId     Int?      @map("crontab_id")
+  crontab       Crontab?  @relation(fields: [crontabId], references: [id])
+  solarId       Int?      @map("solar_id")
+  solar         Solar?    @relation(fields: [solarId], references: [id])
+  clockedId     Int?      @map("clocked_id")
+  clocked       Clocked?  @relation(fields: [clockedId], references: [id])
+  one_off       Boolean   @default(false)
+  start_time    DateTime?
+  customId      Int?      @map("custom_id")
+  custom        CustomSchedule? @relation(fields: [customId], references: [id])
+  headers       String    @default("{}")
+  queue_override  String?   @db.VarChar(200) @map("queue_override")
+
+  @@index([intervalId])
+  @@index([crontabId])
+  @@index([solarId])
+  @@index([clockedId])
+  @@index([customId])
+  @@map("django_celery_beat_periodictask")
+}
+
+model Interval {
+  id            Int                @id @default(autoincrement())
+  every         Int
+  period        String             @db.VarChar(24)
+  periodictasks CustomPeriodicTask[]
+
+  @@unique([every, period])
+  @@map("django_celery_beat_intervalschedule")
+}
+
+model Crontab {
+  id            Int                @id @default(autoincrement())
+  minute        String             @db.VarChar(240)
+  hour          String             @db.VarChar(96)
+  day_of_week   String             @db.VarChar(64)
+  day_of_month  String             @db.VarChar(124)
+  month_of_year String             @db.VarChar(64)
+  periodictasks CustomPeriodicTask[]
+
+  @@map("django_celery_beat_crontabschedule")
+}
+
+model Solar {
+  id            Int                @id @default(autoincrement())
+  event         String             @db.VarChar(24)
+  latitude      Decimal            @db.Decimal(9, 6)
+  longitude     Decimal            @db.Decimal(9, 6)
+  periodictasks CustomPeriodicTask[]
+
+  @@unique([event, latitude, longitude])
+  @@map("django_celery_beat_solarschedule")
+}
+
+model Clocked {
+  id            Int                @id @default(autoincrement())
+  clocked_time  DateTime
+  timezone      String             @db.VarChar(63)
+  enabled       Boolean            @default(true)
+  periodictasks CustomPeriodicTask[]
+
+  @@map("django_celery_beat_clockedschedule")
+}

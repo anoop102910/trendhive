@@ -1,0 +1,46 @@
+model Page {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique @db.VarChar(255)
+  title       String   @db.VarChar(250)
+  pageTypeId  Int
+  pageType    PageType @relation(fields: [pageTypeId], references: [id])
+  content     Json?   
+  createdAt   DateTime @default(now()) @db.DateTime(6)
+  metadata    Json?   
+  privateMetadata Json?
+  isPublished Boolean  @default(false)
+  translations PageTranslation[]
+
+  @@index([createdAt])
+  @@index([title, slug], type: Gin)
+  @@map("Page")
+}
+
+model PageTranslation {
+  id           Int      @id @default(autoincrement())
+  languageCode String
+  pageId       Int
+  page         Page     @relation(fields: [pageId], references: [id])
+  title        String?  @db.VarChar(255)
+  content      Json?
+  seoTitle     String?  @db.VarChar(70)
+  seoDescription String? @db.VarChar(300)
+  slug         String?  @db.VarChar(255)
+
+  @@unique([languageCode, slug], map: "uniq_lang_slug_pagetransl")
+  @@unique([languageCode, pageId])
+  @@index([languageCode, pageId])
+  @@map("PageTranslation")
+}
+
+model PageType {
+  id          Int      @id @default(autoincrement())
+  name        String   @db.VarChar(250)
+  slug        String   @unique @db.VarChar(255)
+  metadata    Json?
+  privateMetadata Json?
+  pages       Page[]
+
+  @@index([name, slug], type: Gin)
+  @@map("PageType")
+}

@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Address {
+  id                Int       @id @default(autoincrement())
+  first_name        String?   @map("first_name") @db.VarChar(256)
+  last_name         String?   @map("last_name") @db.VarChar(256)
+  company_name      String?   @map("company_name") @db.VarChar(256)
+  street_address_1  String?   @map("street_address_1") @db.VarChar(256)
+  street_address_2  String?   @map("street_address_2") @db.VarChar(256)
+  city              String?   @map("city") @db.VarChar(256)
+  city_area         String?   @map("city_area") @db.VarChar(128)
+  postal_code       String?   @map("postal_code") @db.VarChar(20)
+  country           String    @map("country") @db.CountryCode
+  country_area      String?   @map("country_area") @db.VarChar(128)
+  phone             String?   @map("phone") @db.VarChar(128)
+  validation_skipped Boolean @default(false) @map("validation_skipped")
+  user_addresses User[] @relation(name: "user_addresses")
+  default_shipping_address User? @relation(name: "default_shipping_address")
+  default_billing_address User? @relation(name: "default_billing_address")
+  metadata          Json      @default("{}") @map("metadata")
+  private_metadata  Json      @default("{}") @map("private_metadata")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([first_name, last_name, city, country], name: "address_search_gin", type: Gin)
+  @@index([company_name, street_address_1, street_address_2, city, postal_code, phone], name: "warehouse_address_search_gin", type: Gin)
+  @@index([country], name: "address_country_idx", type: BTree)
+  @@map("account_address")
+}
+
+model User {
+  id                        Int                        @id @default(autoincrement())
+  email                     String                     @unique @map("email") @db.VarChar(254)
+  first_name                String?                    @map("first_name") @db.VarChar(256)
+  last_name                 String?                    @map("last_name") @db.VarChar(256)
+  addresses                 Address[]                  @relation(name: "user_addresses")
+  is_staff                  Boolean                    @default(false) @map("is_staff")
+  is_active                 Boolean                    @default(true) @map("is_active")
+  is_confirmed              Boolean                    @default(true) @map("is_confirmed")
+  last_confirm_email_request DateTime?                @map("last_confirm_email_request")
+  note                      String?                    @map("note")
+  date_joined               DateTime                   @default(now()) @map("date_joined")
+  updated_at                DateTime                   @updatedAt @map("updated_at")
+  last_password_reset_request DateTime?                @map("last_password_reset_request")
+  default_shipping_address_id   Int?                     @map("default_shipping_address")
+  default_shipping_address Address? @relation(name: "default_shipping_address", fields: [default_shipping_address_id], references: [id], onDelete: SetNull)
+  default_billing_address_id    Int?                     @map("default_billing_address")
+  default_billing_address Address? @relation(name: "default_billing_address", fields: [default_billing_address_id], references: [id], onDelete: SetNull)
+  avatar                    String?                    @map("avatar") @db.VarChar(100)
+  jwt_token_key             String                     @default(dbgenerated("gen_random_uuid()")) @map("jwt_token_key") @db.VarChar(12)
+  language_code             String                     @default("en") @map("language_code") @db.VarChar(35)
+  search_document           String                     @default("") @map("search_document")
+  uuid                      String                     @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  number_of_orders          Int                      @default(0) @map("number_of_orders")
+  password                  String                     @map("password")
+  last_login                DateTime?                  @map("last_login")
+  is_superuser              Boolean                    @default(false)
+  user_permissions  Permission[]
+  groups Group[]
+  notes CustomerNote[]
+  events CustomerEvent[]
+  staff_notification StaffNotificationRecipient? @relation(fields: [id], references: [user_id])
+  metadata          Json      @default("{}") @map("metadata")
+  private_metadata  Json      @default("{}") @map("private_metadata")
+
+  @@map("account_user")
+  @@index([email], name: "user_email_idx", type: BTree)
+  @@index([first_name], name: "first_name_gin", type: Gin)
+  @@index([last_name], name: "last_name_gin", type: Gin)
+  @@index([search_document], name: "user_search_gin", type: Gin)
+  @@index([private_metadata], name: "user_p_meta_jsonb_path_idx", type: Gin)
+  @@index([date_joined], name: "user_date_joined_idx", type: BTree)
+  @@index([number_of_orders], name: "user_number_of_orders_idx", type: BTree)
+  @@index([email, first_name, last_name], name: "order_user_search_gin", type: Gin)
+
+}
+
+model CustomerNote {
+  id        Int      @id @default(autoincrement())
+  user_id   Int?     @map("user_id")
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  date      DateTime @default(now()) @map("date")
+  content   String   @map("content")
+  is_public Boolean  @default(true) @map("is_public")
+  customer_id Int @map("customer_id")
+  customer User @relation(fields: [customer_id], references: [id], onDelete: Cascade, name: "notes")
+
+  @@map("account_customernote")
+  @@index([date])
+}
+
+model CustomerEvent {
+  id         Int       @id @default(autoincrement())
+  date       DateTime  @default(now()) @map("date")
+  type       String    @map("type") @db.VarChar(255)
+  order_id   Int?      @map("order_id")
+  order      Order?    @relation(fields: [order_id], references: [id], onDelete: SetNull)
+  parameters Json      @default("{}") @map("parameters")
+  user_id    Int? @map("user_id")
+  user User? @relation(fields: [user_id], references: [id], onDelete: Cascade, name: "events")
+  app_id     Int?      @map("app_id")
+  app      App? @relation(fields: [app_id], references: [id], onDelete: SetNull)
+
+  @@map("account_customerevent")
+  @@orderBy([date])
+}
+
+model StaffNotificationRecipient {
+  user_id      Int       @unique @map("user_id")
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  staff_email  String?   @unique @map("staff_email") @db.VarChar(254)
+  active       Boolean   @default(true) @map("active")
+
+  @@map("account_staffnotificationrecipient")
+  @@orderBy([staff_email])
+}
+
+model Group {
+  id                        Int                        @id @default(autoincrement())
+  name                      String                     @unique @map("name") @db.VarChar(150)
+  permissions Permission[]
+   restricted_access_to_channels Boolean @default(false) @map("restricted_access_to_channels")
+  channels Channel[]
+ User User[]
+
+  @@map("auth_group")
+}
+
+model Permission {
+  id Int @id @default(autoincrement())
+  name String @map("name")
+  codename String @map("codename")
+  content_type_id Int @map("content_type_id")
+ Group Group[]
+ User User[]
+  @@map("auth_permission")
+
+}
+
+model App {
+  id Int @id @default(autoincrement())
+  customerEvent CustomerEvent[]
+
+  @@ignore
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  customerEvent CustomerEvent[]
+  @@ignore
+}
+
+model Channel {
+  id Int @id @default(autoincrement())
+  group Group[]
+  @@ignore
+}
+

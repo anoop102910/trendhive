@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ChannelWarehouse {
+  id         Int      @id @default(autoincrement())
+  sort_order Int
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId Int
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId String   @db.Uuid
+
+  @@unique([channelId, warehouseId])
+  @@index([sort_order, id])
+}
+
+model Warehouse {
+  id                     String                     @id @default(uuid()) @db.Uuid
+  name                   String                   @db.VarChar(250)
+  slug                   String                   @unique @db.VarChar(255)
+  channels               ChannelWarehouse[]
+  shipping_zones         ShippingZone[]           @relation(name: "WarehouseToShippingZone")
+  address                Address                  @relation(fields: [addressId], references: [id], onDelete: Protect)
+  addressId              Int
+  email                  String                   @default("") @db.VarChar
+  click_and_collect_option String                   @default("DISABLED") @db.VarChar(30)
+  is_private             Boolean                  @default(true)
+  stocks                 Stock[]
+  metadata               Metadata[]               @relation(name: "WarehouseToMetadata")
+  privateMetadata        PrivateMetadata[]        @relation(name: "WarehouseToPrivateMetadata")
+  externalReference      ExternalReference?       @relation(name: "WarehouseToExternalReference")
+
+  @@index([click_and_collect_option], name: "click_and_collect_option_idx")
+  @@map("warehouse")
+}
+
+model Stock {
+  id              Int             @id @default(autoincrement())
+  warehouse       Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  warehouseId     String          @db.Uuid
+  product_variant ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Cascade)
+  productVariantId Int
+  quantity        Int             @default(0)
+  quantity_allocated Int             @default(0)
+  allocations     Allocation[]
+  reservations    Reservation[]
+
+  @@unique([warehouseId, productVariantId])
+  @@map("stock")
+}
+
+model Allocation {
+  id              Int      @id @default(autoincrement())
+  order_line      OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+  orderLineId     Int
+  stock           Stock    @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId         Int
+  quantity_allocated Int      @default(0) @db.PositiveBigInt
+
+  @@unique([orderLineId, stockId])
+  @@map("allocation")
+}
+
+model PreorderAllocation {
+  id                          Int                         @id @default(autoincrement())
+  order_line                  OrderLine                   @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
+  orderLineId                 Int
+  quantity                    Int                         @default(0) @db.PositiveBigInt
+  product_variant_channel_listing ProductVariantChannelListing @relation(fields: [productVariantChannelListingId], references: [id], onDelete: Cascade)
+  productVariantChannelListingId Int
+
+  @@unique([orderLineId, productVariantChannelListingId])
+  @@map("preorderallocation")
+}
+
+model PreorderReservation {
+  id                          Int                         @id @default(autoincrement())
+  checkout_line               CheckoutLine                @relation(fields: [checkoutLineId], references: [id], onDelete: Cascade)
+  checkoutLineId              Int
+  product_variant_channel_listing ProductVariantChannelListing @relation(fields: [productVariantChannelListingId], references: [id], onDelete: Cascade)
+  productVariantChannelListingId Int
+  quantity_reserved           Int                         @default(0) @db.PositiveBigInt
+  reserved_until              DateTime
+
+  @@unique([checkoutLineId, productVariantChannelListingId])
+  @@index([checkoutLineId, reserved_until])
+  @@map("preorderreservation")
+}
+
+model Reservation {
+  id             Int          @id @default(autoincrement())
+  checkout_line  CheckoutLine @relation(fields: [checkoutLineId], references: [id], onDelete: Cascade)
+  checkoutLineId Int
+  stock          Stock        @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  stockId        Int
+  quantity_reserved Int          @default(0) @db.PositiveBigInt
+  reserved_until DateTime
+
+  @@unique([checkoutLineId, stockId])
+  @@index([checkoutLineId, reserved_until])
+  @@map("reservation")
+}
+
+model Channel {
+  id               Int                  @id @default(autoincrement())
+  warehouses       ChannelWarehouse[]
+  shippingZones    ShippingZone[]       @relation(name: "ChannelToShippingZone")
+
+  @@map("channel")
+}
+
+model ShippingZone {
+  id         Int           @id @default(autoincrement())
+  warehouses Warehouse[]   @relation(name: "WarehouseToShippingZone")
+  channels   Channel[]     @relation(name: "ChannelToShippingZone")
+
+  @@map("shippingzone")
+}
+
+model Address {
+  id        Int         @id @default(autoincrement())
+  warehouses Warehouse[]
+
+  @@map("address")
+}
+
+model OrderLine {
+  id          Int           @id @default(autoincrement())
+  allocations Allocation[]
+  preorder_allocations PreorderAllocation[]
+
+  @@map("orderline")
+}
+
+model CheckoutLine {
+  id                    Int                     @id @default(autoincrement())
+  preorder_reservations PreorderReservation[]
+  reservations          Reservation[]
+
+  @@map("checkoutline")
+}
+
+model ProductVariant {
+  id     Int     @id @default(autoincrement())
+  stocks Stock[]
+
+  @@map("productvariant")
+}
+
+model ProductVariantChannelListing {
+  id                       Int                      @id @default(autoincrement())
+  preorder_allocations     PreorderAllocation[]
+  preorder_reservations    PreorderReservation[]
+
+  @@map("productvariantchannellisting")
+}
+
+model Metadata {
+    id          Int     @id @default(autoincrement())
+    warehouse   Warehouse? @relation(name: "WarehouseToMetadata", fields: [warehouseId], references: [id])
+    warehouseId String?   @db.Uuid
+
+    @@map("metadata")
+}
+
+model PrivateMetadata {
+    id          Int     @id @default(autoincrement())
+    warehouse   Warehouse? @relation(name: "WarehouseToPrivateMetadata", fields: [warehouseId], references: [id])
+    warehouseId String?   @db.Uuid
+
+    @@map("privatemetadata")
+}
+
+model ExternalReference {
+    id          Int     @id @default(autoincrement())
+    warehouse   Warehouse? @relation(name: "WarehouseToExternalReference", fields: [warehouseId], references: [id])
+    warehouseId String?   @unique @db.Uuid
+
+    @@map("externalreference")
+}

@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PluginConfiguration {
+  id              Int             @id @default(autoincrement())
+  identifier      String          @default("") @db.VarChar(128)
+  name            String          @default("") @db.VarChar(128)
+  channelId       Int?            @map("channel")
+  channel         Channel?        @relation(fields: [channelId], references: [id])
+  description     String          @default("") @db.Text
+  active          Boolean         @default(false)
+  configuration   Json            @default(Json({}))
+  email_templates EmailTemplate[]
+
+  @@unique([identifier, channelId], name: "plugin_configuration_identifier_channel_key")
+  @@map("plugin_pluginconfiguration")
+}
+
+model EmailTemplate {
+  id                    Int                 @id @default(autoincrement())
+  plugin_configurationId Int                 @map("plugin_configuration")
+  plugin_configuration  PluginConfiguration @relation(fields: [plugin_configurationId], references: [id], name: "email_templates")
+  name                  String              @db.VarChar(255)
+  value                 String              @db.Text
+
+  @@map("plugin_emailtemplate")
+}
+
+model Channel {
+  id                    Int                 @id @default(autoincrement())
+  PluginConfiguration PluginConfiguration[]
+
+  @@map("channel_channel")
+}

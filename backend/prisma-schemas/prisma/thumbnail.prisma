@@ -1,0 +1,55 @@
+model Thumbnail {
+  id               Int       @id @default(autoincrement())
+  image            String
+  size             Int       @validator(validate_thumbnail_size)
+  format           String?   
+  category         Category? @relation(fields: [categoryId], references: [id])
+  categoryId       Int?      @map("category_id")
+  collection       Collection? @relation(fields: [collectionId], references: [id])
+  collectionId     Int?      @map("collection_id")
+  product_media    ProductMedia? @relation(fields: [product_mediaId], references: [id])
+  product_mediaId  Int?      @map("product_media_id")
+  user             User? @relation(fields: [userId], references: [id])
+  userId           Int?      @map("user_id")
+  app              App? @relation(fields: [appId], references: [id])
+  appId            Int?      @map("app_id")
+  app_installation AppInstallation? @relation(fields: [appInstallationId], references: [id])
+  appInstallationId Int?      @map("app_installation_id")
+
+  @@index([categoryId])
+  @@index([collectionId])
+  @@index([product_mediaId])
+  @@index([userId])
+  @@index([appId])
+  @@index([appInstallationId])
+}
+
+model Category {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model Collection {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model ProductMedia {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model User {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model App {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}
+
+model AppInstallation {
+  id         Int         @id @default(autoincrement())
+  thumbnails Thumbnail[]
+}

@@ -1,0 +1,27 @@
+model SeoModel {
+  seo_title     String?   @db.VarChar(70)
+  seo_description String?   @db.VarChar(300)
+
+  @@abstract
+}
+
+model SeoModelTranslation {
+  id            Int      @id @default(autoincrement())
+  languageCode  String   @db.VarChar(10)
+
+  seo_title     String?   @db.VarChar(70)
+  seo_description String?   @db.VarChar(300)
+
+  @@abstract
+}
+
+model SeoModelTranslationWithSlug {
+  id            Int      @id @default(autoincrement())
+  languageCode  String   @db.VarChar(10)
+
+  seo_title     String?   @db.VarChar(70)
+  seo_description String?   @db.VarChar(300)
+  slug          String?   @db.VarChar(255)
+
+  @@abstract
+}

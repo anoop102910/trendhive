@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  checkouts Checkout[]
+  email     String?
+  // other user fields
+}
+
+model Address {
+  id Int @id @default(autoincrement())
+  checkoutBilling  Checkout[] @relation("BillingAddress")
+  checkoutShipping Checkout[] @relation("ShippingAddress")
+
+  //Other address fields
+}
+
+model Channel {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other channel fields
+}
+
+model ShippingMethod {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other shipping method fields
+}
+
+model Warehouse {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other warehouse fields
+}
+
+model GiftCard {
+  id        Int        @id @default(autoincrement())
+  checkouts Checkout[]
+  // other giftcard fields
+  current_balance_amount Float?
+
+}
+
+model ProductVariant {
+  id        Int           @id @default(autoincrement())
+  CheckoutLine CheckoutLine[]
+  is_shipping_required Boolean? 
+  // Other product variant fields
+}
+
+model Payment {
+  id        Int @id @default(autoincrement())
+  checkoutId String
+  checkout  Checkout @relation(fields: [checkoutId], references: [token])
+  is_active Boolean?
+}
+
+model Checkout {
+  createdAt                 DateTime              @default(now())
+  lastChange                DateTime              @default(now()) @updatedAt @db.Timestamp @map("last_change")
+  completingStartedAt       DateTime?             @db.Timestamp @map("completing_started_at")
+  lastTransactionModifiedAt DateTime?             @db.Timestamp @map("last_transaction_modified_at")
+  automaticallyRefundable   Boolean               @default(false) @map("automatically_refundable")
+  user                      User?                 @relation(fields: [userId], references: [id])
+  userId                    Int?                  @map("user_id")
+  email                     String?               @db.VarChar
+  token                     String                @id @default(uuid()) @db.Uuid
+  channel                   Channel               @relation(fields: [channelId], references: [id])
+  channelId                 Int                   @map("channel_id")
+  saveBillingAddress        Boolean               @default(true) @map("save_billing_address")
+  billingAddress            Address?              @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  billingAddressId          Int?                  @map("billing_address_id")
+  saveShippingAddress       Boolean               @default(true) @map("save_shipping_address")
+  shippingAddress           Address?              @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  shippingAddressId         Int?                  @map("shipping_address_id")
+  shippingMethod            ShippingMethod?       @relation(fields: [shippingMethodId], references: [id])
+  shippingMethodId          Int?                  @map("shipping_method_id")
+  shippingMethodName        String?               @db.VarChar(255) @map("shipping_method_name")
+  externalShippingMethodId  String?               @db.VarChar(512) @map("external_shipping_method_id")
+  collectionPoint           Warehouse?            @relation(fields: [collectionPointId], references: [id])
+  collectionPointId         Int?                  @map("collection_point_id")
+  note                      String                @default("") @db.Text
+  currency                  String                @db.VarChar(3)
+  country                   String                @db.CountryCode
+  totalNetAmount            Decimal               @default(0) @db.Decimal
+  totalGrossAmount          Decimal               @default(0) @db.Decimal
+  baseTotalAmount           Decimal               @default(0) @db.Decimal @map("base_total_amount")
+  subtotalNetAmount         Decimal               @default(0) @db.Decimal @map("subtotal_net_amount")
+  subtotalGrossAmount       Decimal               @default(0) @db.Decimal @map("subtotal_gross_amount")
+  baseSubtotalAmount        Decimal               @default(0) @db.Decimal @map("base_subtotal_amount")
+  shippingPriceNetAmount     Decimal               @default(0) @db.Decimal @map("shipping_price_net_amount")
+  shippingPriceGrossAmount  Decimal               @default(0) @db.Decimal @map("shipping_price_gross_amount")
+  shippingTaxRate           Decimal               @default(0) @db.Decimal @map("shipping_tax_rate")
+  undiscountedBaseShippingPriceAmount Decimal               @default(0) @db.Decimal @map("undiscounted_base_shipping_price_amount")
+  authorizeStatus           String                @default("none") @db.VarChar(32) @map("authorize_status") @index
+  chargeStatus              String                @default("none") @db.VarChar(32) @map("charge_status") @index
+  priceExpiration           DateTime              @default(now()) @db.Timestamp @map("price_expiration")
+  discountAmount            Decimal               @default(0) @db.Decimal @map("discount_amount")
+  discountName              String?               @db.VarChar(255) @map("discount_name")
+  translatedDiscountName    String?               @db.VarChar(255) @map("translated_discount_name")
+  voucherCode               String?               @db.VarChar(255) @map("voucher_code")
+  isVoucherUsageIncreased Boolean               @default(false) @map("is_voucher_usage_increased")
+  redirectUrl               String?               @db.Text @map("redirect_url")
+  trackingCode              String?               @db.VarChar(255) @map("tracking_code")
+  languageCode              String                @default("en") @db.VarChar(35) @map("language_code")
+  taxExemption              Boolean               @default(false) @map("tax_exemption")
+  taxError                  String?               @db.VarChar(256) @map("tax_error")
+  lines                     CheckoutLine[]
+  giftCards                 GiftCard[] @relation("CheckoutGiftCards")
+  payments Payment[]
+  metadataStorage CheckoutMetadata?
+
+  @@map("Checkout")
+  @@index([lastChange])
+}
+
+model CheckoutLine {
+  id                      String   @id @default(uuid()) @db.Uuid
+  oldId                   Int?     @unique @map("old_id")
+  createdAt               DateTime @default(now()) @db.Timestamp
+  checkout                Checkout @relation(fields: [checkoutId], references: [token])
+  checkoutId              String   @map("checkout_id")
+  variant                 ProductVariant @relation(fields: [variantId], references: [id])
+  variantId               Int   @map("variant_id")
+  quantity                Int      @map("quantity")
+  isGift                  Boolean  @default(false) @map("is_gift")
+  priceOverride           Decimal? @db.Decimal @map("price_override")
+  currency                String   @db.VarChar(3)
+  undiscountedUnitPriceAmount Decimal  @default(0) @db.Decimal @map("undiscounted_unit_price_amount")
+  priorUnitPriceAmount    Decimal? @db.Decimal @map("prior_unit_price_amount")
+  totalPriceNetAmount      Decimal  @default(0) @db.Decimal @map("total_price_net_amount")
+  totalPriceGrossAmount     Decimal  @default(0) @db.Decimal @map("total_price_gross_amount")
+  taxRate                 Decimal  @default(0) @db.Decimal @map("tax_rate")
+  metadata                Metadata[]
+  privateMetadata PrivateMetadata[]
+
+
+  @@map("CheckoutLine")
+  @@index([createdAt, id])
+}
+
+model CheckoutMetadata {
+  checkout   Checkout @relation(fields: [checkoutId], references: [token]) @unique
+  checkoutId String @map("checkout_id")
+  id    Int @id @default(autoincrement())
+  metadata                Metadata[]
+  privateMetadata PrivateMetadata[]
+
+  @@map("CheckoutMetadata")
+}
+
+model Metadata {
+  id        Int      @id @default(autoincrement())
+  key       String
+  value     String
+  checkoutLine   CheckoutLine? @relation(fields: [checkoutLineId], references: [id])
+  checkoutLineId String? @db.Uuid @map("checkout_line_id")
+  checkoutMetadata   CheckoutMetadata? @relation(fields: [checkoutMetadataId], references: [id])
+  checkoutMetadataId Int? @map("checkout_metadata_id")
+  @@map("Metadata")
+}
+
+model PrivateMetadata {
+  id        Int      @id @default(autoincrement())
+  key       String
+  value     String
+  checkoutLine   CheckoutLine? @relation(fields: [checkoutLineId], references: [id])
+  checkoutLineId String? @db.Uuid @map("checkout_line_id")
+  checkoutMetadata   CheckoutMetadata? @relation(fields: [checkoutMetadataId], references: [id])
+  checkoutMetadataId Int? @map("checkout_metadata_id")
+  @@map("PrivateMetadata")
+}

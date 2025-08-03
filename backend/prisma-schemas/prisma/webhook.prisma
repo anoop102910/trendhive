@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Webhook {
+  id                       Int      @id @default(autoincrement())
+  name                     String?  @map("name")
+  appId                    Int      @map("app_id")
+  app                      App      @relation(fields: [appId], references: [id], map: "webhooks")
+  target_url               String   @map("target_url")
+  is_active                Boolean  @default(true) @map("is_active")
+  secret_key               String?  @map("secret_key")
+  subscription_query       String?  @map("subscription_query")
+  custom_headers           Json?    @map("custom_headers")
+  filterable_channel_slugs String[] @default([]) @map("filterable_channel_slugs")
+  events                   WebhookEvent[]
+
+  @@map("webhook")
+  @@index([filterable_channel_slugs], type: Gin, name: "filterable_channel_slugs_idx")
+  @@ignore
+}
+
+model WebhookEvent {
+  id         Int     @id @default(autoincrement())
+  webhookId  Int     @map("webhook_id")
+  webhook    Webhook @relation(fields: [webhookId], references: [id], map: "events")
+  event_type String  @map("event_type") @db.VarChar(128)
+
+  @@map("webhookevent")
+  @@index([event_type])
+}
+
+model App {
+  id      Int       @id @default(autoincrement())
+  webhooks Webhook[]
+
+  @@map("app_app")
+}

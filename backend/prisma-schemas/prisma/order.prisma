@@ -1,0 +1,318 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id                                    String                            @id @default(uuid())
+  number                                Int                               @unique @default(autoincrement())
+  useOldId                              Boolean                           @default(false)
+  createdAt                             DateTime                          @default(now())
+  updatedAt                             DateTime                          @updatedAt @db.Timestamp
+  expiredAt                             DateTime?                         @db.Timestamp
+  status                                String                            @default("UNFULFILLED")
+  authorizeStatus                       String                            @default("NONE") @db.VarChar(32)
+  chargeStatus                          String                            @default("NONE") @db.VarChar(32)
+  user                                  User?                             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId                                String?                           @map("user_id")
+  languageCode                          String                            @default("en") @db.VarChar(35)
+  trackingClientId                      String?                           @db.VarChar(36)
+  billingAddress                        Address?                          @relation(fields: [billingAddressId], references: [id], onDelete: SetNull, name: "billing_address")
+  billingAddressId                      String?                           @map("billing_address_id")
+  shippingAddress                       Address?                          @relation(fields: [shippingAddressId], references: [id], onDelete: SetNull, name: "shipping_address")
+  shippingAddressId                     String?                           @map("shipping_address_id")
+  draftSaveBillingAddress               Boolean?                          
+  draftSaveShippingAddress              Boolean?
+  userEmail                             String                            @db.VarChar(254)
+  originalId                            String?                           @map("original_id")
+  original                              Order?                            @relation(
+    fields: [originalId],
+    references: [id],
+    onDelete: SetNull,
+    name: "OrderToOrder"
+  )
+  relatedOrders                         Order[]                           @relation(
+    name: "OrderToOrder"
+  )
+  origin                                String                            @db.VarChar(32)
+  currency                              String                            @db.VarChar(3)
+  shippingMethod                        ShippingMethod?                   @relation(fields: [shippingMethodId], references: [id], onDelete: SetNull)
+  shippingMethodId                      String?                           @map("shipping_method_id")
+  collectionPoint                       Warehouse?                        @relation(fields: [collectionPointId], references: [id], onDelete: SetNull)
+  collectionPointId                     String?                           @map("collection_point_id")
+  shippingMethodName                    String?                           @db.VarChar(255)
+  collectionPointName                   String?                           @db.VarChar(255)
+  channel                               Channel                           @relation(fields: [channelId], references: [id], onDelete: Protect)
+  channelId                             String                            @map("channel_id")
+  shippingPriceNetAmount                Decimal                           @db.Decimal
+  shippingPriceGrossAmount               Decimal                           @db.Decimal
+  baseShippingPriceAmount               Decimal                           @db.Decimal
+  undiscountedBaseShippingPriceAmount  Decimal                           @db.Decimal
+  shippingTaxRate                       Decimal?                          @db.Decimal
+  shippingTaxClass                      TaxClass?                         @relation(fields: [shippingTaxClassId], references: [id], onDelete: SetNull)
+  shippingTaxClassId                    String?                           @map("shipping_tax_class_id")
+  shippingTaxClassName                  String?                           @db.VarChar(255)
+  shippingTaxClassPrivateMetadata       Json                              @default("{}") @db.Json
+  shippingTaxClassMetadata              Json                              @default("{}") @db.Json
+  checkoutToken                         String?                           @db.VarChar(36)
+  linesCount                            Int
+  totalNetAmount                        Decimal                           @db.Decimal
+  undiscountedTotalNetAmount           Decimal                           @db.Decimal
+  totalGrossAmount                      Decimal                           @db.Decimal
+  undiscountedTotalGrossAmount         Decimal                           @db.Decimal
+  totalChargedAmount                    Decimal                           @db.Decimal
+  totalAuthorizedAmount                   Decimal                           @db.Decimal
+  subtotalNetAmount                     Decimal                           @db.Decimal
+  subtotalGrossAmount                   Decimal                           @db.Decimal
+  voucher                               Voucher?                          @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  voucherId                             String?                           @map("voucher_id")
+  voucherCode                           String?                           @db.VarChar(255)
+  giftCards                             GiftCard[]                        @relation(name: "OrderToGiftCard")
+  displayGrossPrices                    Boolean                           @default(true)
+  customerNote                          String                            @default("") @db.Text
+  weight                                Float
+  redirectUrl                           String?                           @db.VarChar
+  searchDocument                        String                            @default("") @db.Text
+  searchVector                          String?                           @db.Text
+  shouldRefreshPrices                   Boolean                           @default(true)
+  taxExemption                          Boolean                           @default(false)
+  taxError                              String?                           @db.VarChar(256)
+  lines                               OrderLine[]                       
+  fulfillments                          Fulfillment[]                     
+  events                                OrderEvent[]                      
+  grantedRefunds                        OrderGrantedRefund[]              
+  payments                              Payment[]                         
+
+  @@map("order_order")
+  @@index([createdAt], name: "idx_order_created_at")
+  @@index([number])
+  @@index([checkoutToken], name: "checkout_token_btree_idx")
+  @@index([linesCount], name: "lines_count_idx")
+  @@index([totalGrossAmount], name: "order_totalgrossamount_idx")
+  @@index([totalNetAmount], name: "order_totalnetamount_idx")
+  @@index([status], name: "order_status_idx")
+  @@index([authorizeStatus])
+  @@index([chargeStatus])
+  @@index([voucherCode], type: Gin, name: "order_voucher_code_idx")
+  @@index([userEmail, userId], type: Gin, name: "order_user_email_user_id_idx")
+}
+
+model OrderLine {
+  id                             String                @id @default(uuid())
+  oldId                          Int?                  @unique
+  createdAt                      DateTime              @default(now())
+  order                          Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId                        String                @map("order_id")
+  variant                        ProductVariant?       @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  variantId                      String?               @map("variant_id")
+  productName                    String                @db.VarChar(386)
+  variantName                    String                @default("") @db.VarChar(255)
+  translatedProductName          String                @default("") @db.VarChar(386)
+  translatedVariantName          String                @default("") @db.VarChar(255)
+  productSku                     String?               @db.VarChar(255)
+  productVariantId               String?               @db.VarChar(255)
+  productTypeId                  Int?     
+  isShippingRequired             Boolean
+  isGiftCard                     Boolean
+  quantity                       Int
+  quantityFulfilled              Int                   @default(0)
+  isGift                         Boolean               @default(false)
+  currency                       String                @db.VarChar(3)
+  unitDiscountAmount             Decimal               @db.Decimal
+  unitDiscountType               String?               @db.VarChar(10)
+  unitDiscountReason             String?               @db.Text
+  unitDiscountValue              Decimal               @default(0.0) @db.Decimal
+  unitPriceNetAmount             Decimal               @db.Decimal
+  unitPriceGrossAmount           Decimal               @db.Decimal
+  totalPriceNetAmount            Decimal               @db.Decimal
+  totalPriceGrossAmount          Decimal               @db.Decimal
+  undiscountedUnitPriceGrossAmount Decimal               @default(0.0) @db.Decimal
+  undiscountedUnitPriceNetAmount   Decimal               @default(0.0) @db.Decimal
+  undiscountedTotalPriceGrossAmount Decimal               @default(0.0) @db.Decimal
+  undiscountedTotalPriceNetAmount  Decimal               @default(0.0) @db.Decimal
+  baseUnitPriceAmount            Decimal               @default(0.0) @db.Decimal
+  undiscountedBaseUnitPriceAmount   Decimal               @default(0.0) @db.Decimal
+  taxRate                        Decimal?              @db.Decimal
+  taxClass                       TaxClass?             @relation(fields: [taxClassId], references: [id], onDelete: SetNull)
+  taxClassId                     String?               @map("tax_class_id")
+  taxClassName                   String?               @db.VarChar(255)
+  taxClassPrivateMetadata        Json                  @default("{}") @db.Json
+  taxClassMetadata               Json                  @default("{}") @db.Json
+  isPriceOverridden              Boolean?
+  voucherCode                    String?               @db.VarChar(255)
+  saleId                         String?               @db.VarChar(255)
+  draftBasePriceExpireAt         DateTime?             @db.Timestamp
+  fulfillmentLines               FulfillmentLine[]    
+  grantedRefundLines             OrderGrantedRefundLine[]
+
+  @@map("order_orderline")
+  @@index([productTypeId], name: "product_type_id_btree_idx")
+}
+
+model Fulfillment {
+  fulfillmentOrder Int               
+  order            Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId          String            @map("order_id")
+  status           String            @default("FULFILLED")
+  trackingNumber   String            @default("") @db.VarChar(255)
+  createdAt        DateTime          @default(now())
+  shippingRefundAmount Decimal?          @db.Decimal
+  totalRefundAmount    Decimal?          @db.Decimal
+  lines            FulfillmentLine[] 
+
+  @@map("order_fulfillment")
+  @@id([orderId, fulfillmentOrder])
+  @@index([status], name: "fulfillment_status_idx")
+}
+
+model FulfillmentLine {
+  orderLine   OrderLine @relation(fields: [orderlineId], references: [id], onDelete: Cascade)
+  orderlineId String    @map("order_line_id")
+  fulfillment Fulfillment @relation(fields: [orderId, fulfillmentOrder], references: [orderId, fulfillmentOrder], onDelete: Cascade)
+  orderId String
+  fulfillmentOrder Int
+  quantity    Int
+  stock       Stock?    @relation(fields: [stockId], references: [id], onDelete: SetNull)
+  stockId     String?   @map("stock_id")
+
+  @@map("order_fulfillmentline")
+  @@id([orderlineId, orderId, fulfillmentOrder])
+}
+
+model OrderEvent {
+  date       DateTime @default(now())
+  type       String   @db.VarChar(255)
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String   @map("order_id")
+  parameters Json     @default("{}") @db.Json
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull, name: "order_event_user")
+  userId     String?  @map("user_id")
+  app        App?     @relation(fields: [appId], references: [id], onDelete: SetNull, name: "order_event_app")
+  appId      String?  @map("app_id")
+  relatedId  String?  @map("related_id")
+  related    OrderEvent? @relation(
+    fields: [relatedId],
+    references: [id],
+    onDelete: SetNull,
+    name: "OrderEventToOrderEvent"
+  )
+  relatedEvents OrderEvent[] @relation(
+    name: "OrderEventToOrderEvent"
+  )
+  id         String   @id @default(uuid())
+
+  @@map("order_orderevent")
+  @@index([relatedId], name: "order_orderevent_related_id_idx")
+  @@index([type])
+  @@index([date], name: "order_orderevent_date_idx")
+}
+
+model OrderGrantedRefund {
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt @db.Timestamp
+  amountValue         Decimal                   @default(0) @db.Decimal
+  currency            String                    @db.VarChar(3)
+  reason              String                    @default("") @db.Text
+  user                User?                     @relation(fields: [userId], references: [id], onDelete: SetNull, name: "order_granted_refund_user")
+  userId              String?                   @map("user_id")
+  app                 App?                      @relation(fields: [appId], references: [id], onDelete: SetNull, name: "order_granted_refund_app")
+  appId               String?                   @map("app_id")
+  order               Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId             String                    @map("order_id")
+  shippingCostsIncluded Boolean                   @default(false)
+  transactionItem     TransactionItem?          @relation(fields: [transactionItemId], references: [id], onDelete: SetNull)
+  transactionItemId   String?                   @map("transaction_item_id")
+  status              String                    @default("NONE") @db.VarChar(128)
+  lines               OrderGrantedRefundLine[]  
+  id                  String                    @id @default(uuid())
+
+  @@map("order_ordergrantedrefund")
+}
+
+model OrderGrantedRefundLine {
+  orderLine      OrderLine          @relation(fields: [orderlineId], references: [id], onDelete: Cascade)
+  orderlineId    String             @map("order_line_id")
+  quantity       Int
+  grantedRefund  OrderGrantedRefund @relation(fields: [grantedRefundId], references: [id], onDelete: Cascade)
+  grantedRefundId String             @map("granted_refund_id")
+  reason         String?            @db.Text
+  id             String             @id @default(uuid())
+
+  @@map("order_ordergrantedrefundline")
+}
+
+model User {
+  id String @id @default(uuid())
+  orders Order[]
+  order_event_user OrderEvent[] @relation("order_event_user")
+  order_granted_refund_user OrderGrantedRefund[] @relation("order_granted_refund_user")
+}
+
+model Address {
+  id String @id @default(uuid())
+  shipping_address Order[] @relation("shipping_address")
+  billing_address Order[] @relation("billing_address")
+}
+
+model ShippingMethod {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model Warehouse {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model TaxClass {
+  id String @id @default(uuid())
+  orders Order[]
+  orderLines OrderLine[]
+}
+
+model Voucher {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model GiftCard {
+  id String @id @default(uuid())
+  orders Order[] @relation(name: "OrderToGiftCard")
+}
+
+model ProductVariant {
+  id String @id @default(uuid())
+  order_lines OrderLine[]
+}
+
+model App {
+  id String @id @default(uuid())
+  order_event_app OrderEvent[] @relation("order_event_app")
+  order_granted_refund_app OrderGrantedRefund[] @relation("order_granted_refund_app")
+}
+
+model Channel {
+  id String @id @default(uuid())
+  orders Order[]
+}
+
+model Payment {
+  id String @id @default(uuid())
+  order Order @relation(fields: [orderId], references: [id])
+  orderId String @map("order_id")
+}
+
+model TransactionItem {
+  id String @id @default(uuid())
+  granted_refund OrderGrantedRefund[]
+}
+
+model Stock {
+  id String @id @default(uuid())
+  fulfillment_lines FulfillmentLine[]
+}
+

@@ -1,0 +1,53 @@
+model User {
+  id               Int                @id @default(autoincrement())
+  exportFiles      ExportFile[]       @relation("UserExportFiles")
+  exportCsvEvents  ExportEvent[]      @relation("UserExportEvents")
+}
+
+model App {
+  id               Int                @id @default(autoincrement())
+  exportFiles      ExportFile[]       @relation("AppExportFiles")
+  exportCsvEvents  ExportEvent[]      @relation("AppExportEvents")
+}
+
+model Job {
+  id        Int      @id @default(autoincrement())
+  # Add fields specific to the Job model here if any
+}
+
+model ExportFile {
+  id           Int        @id @default(autoincrement())
+  user         User?      @relation("UserExportFiles", fields: [userId], references: [id])
+  userId       Int?       @map("user_id")
+  app          App?       @relation("AppExportFiles", fields: [appId], references: [id])
+  appId        Int?       @map("app_id")
+  contentFile  String?    @map("content_file")
+  events       ExportEvent[]
+  // Assuming content_file is stored as a path or URL
+  Job          Job        @relation(fields: [jobId], references: [id])
+  jobId        Int        @unique
+
+  @@map("export_file")
+}
+
+enum ExportEvents {
+  PRODUCT_EXPORTED
+  ORDER_EXPORTED
+  SALE_EXPORTED
+  CUSTOMER_EXPORTED
+}
+
+model ExportEvent {
+  id           Int          @id @default(autoincrement())
+  date         DateTime     @default(now())
+  type         ExportEvents @map("type")
+  parameters   Json
+  exportFile   ExportFile   @relation(fields: [exportFileId], references: [id])
+  exportFileId Int          @map("export_file_id")
+  user         User?        @relation("UserExportEvents", fields: [userId], references: [id])
+  userId       Int?         @map("user_id")
+  app          App?         @relation("AppExportEvents", fields: [appId], references: [id])
+  appId        Int?         @map("app_id")
+
+  @@map("export_event")
+}

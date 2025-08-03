@@ -1,0 +1,27 @@
+model Channel {
+  id                                        Int                                    @id @default(autoincrement())
+  name                                      String
+  is_active                                 Boolean                              @default(false)
+  slug                                      String                                 @unique
+  currency_code                             String
+  default_country                           String
+  allocation_strategy                       String                                 @default("PRIORITIZE_SORTING_ORDER")
+  order_mark_as_paid_strategy               String                                 @default("PAYMENT_FLOW")
+  default_transaction_flow_strategy       String                                 @default("CHARGE")
+  automatically_confirm_all_new_orders  Boolean?                             @default(true)
+  allow_unpaid_orders                       Boolean                              @default(false)
+  automatically_fulfill_non_shippable_gift_card Boolean?                             @default(true)
+  expire_orders_after                       Int?                                   @default(null)
+  delete_expired_orders_after               Int                                    @default(5184000) // default=datetime.timedelta(days=60), represented in seconds
+  include_draft_order_in_voucher_usage  Boolean                              @default(false)
+  use_legacy_error_flow_for_checkout      Boolean                              @default(true)
+  automatically_complete_fully_paid_checkouts Boolean                              @default(false)
+  draft_order_line_price_freeze_period    Int?                                   @default(24)
+  use_legacy_line_discount_propagation_for_order Boolean                              @default(true)
+  release_funds_for_expired_checkouts     Boolean                              @default(false)
+  checkout_ttl_before_releasing_funds   Int                                    @default(21600) // default=datetime.timedelta(hours=6), represented in seconds
+  checkout_release_funds_cut_off_date     DateTime?
+
+  @@map("Channel")
+  @@index([slug])
+}

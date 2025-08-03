@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model EventPayload {
+  id         Int               @id @default(autoincrement())
+  payload    String            @default("")
+  payload_file String? // Assuming FileField stores path as string
+  created_at DateTime          @default(now())
+  deliveries EventDelivery[]
+
+  @@map("eventpayload")
+}
+
+model EventDelivery {
+  id         Int                  @id @default(autoincrement())
+  created_at DateTime             @default(now())
+  status     String               @default("pending")
+  event_type String
+  payloadId  Int? // Foreign Key
+  payload    EventPayload?        @relation(fields: [payloadId], references: [id], onDelete: Cascade)
+  webhookId  Int
+  webhook    Webhook              @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  attempts   EventDeliveryAttempt[]
+
+  @@orderBy([createdAt(desc)])
+  @@map("eventdelivery")
+}
+
+model EventDeliveryAttempt {
+  id                 Int               @id @default(autoincrement())
+  deliveryId         Int? // Foreign Key
+  delivery           EventDelivery?    @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  created_at         DateTime          @default(now())
+  task_id            String?
+  duration           Float?
+  response           String?
+  response_headers   String?
+  response_status_code Int?
+  request_headers    String?
+  status             String            @default("pending")
+
+  @@orderBy([createdAt(desc)])
+  @@map("eventdeliveryattempt")
+}
+
+// Mock Webhook Model - Assuming it exists in webhook.Webhook
+model Webhook {
+  id        Int             @id @default(autoincrement())
+  deliveries EventDelivery[]
+  // Add other fields from Webhook model here if needed
+  @@map("webhook")
+}
+
+// Abstract models are not directly representable in Prisma.
+// You'll need to inherit the fields in concrete models.
+// Here's how you might represent the fields of SortableModel in a concrete model:
+// model ConcreteModel {
+//   id        Int      @id @default(autoincrement())
+//   sort_order Int?   @index
+//   // ... other fields
+//   @@map("concrete_model")
+// }
+
+// Example concrete model incorporating PublishableModel
+// model ConcretePublishableModel {
+//   id           Int       @id @default(autoincrement())
+//   published_at DateTime?
+//   is_published Boolean @default(false)
+//   @@map("concrete_publishable_model")
+// }
+
+// Example concrete model incorporating ModelWithMetadata
+// model ConcreteMetadataModel {
+//   id               Int      @id @default(autoincrement())
+//   private_metadata Json     @default("{}")
+//   metadata         Json     @default("{}")
+//   @@index([private_metadata], map: "concrete_metadata_model_p_meta_idx")
+//   @@index([metadata], map: "concrete_metadata_model_meta_idx")
+//   @@map("concrete_metadata_model")
+// }
+
+// Example concrete model incorporating ModelWithExternalReference
+// model ConcreteExternalReferenceModel {
+//   id                 Int      @id @default(autoincrement())
+//   external_reference String?  @unique @index @db.VarChar(250)
+//   @@map("concrete_external_reference_model")
+// }
+
+// Example concrete model incorporating Job
+// model ConcreteJob {
+//   id         Int      @id @default(autoincrement())
+//   status     String   @default("pending") // Assuming JobStatus.PENDING is the default string value
+//   message    String?
+//   created_at DateTime @default(now())
+//   updated_at DateTime @updatedAt
+//   @@map("concrete_job")
+// }

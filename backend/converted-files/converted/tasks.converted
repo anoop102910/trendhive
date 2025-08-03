@@ -1,0 +1,132 @@
+import { Injectable } from '@nestjs/common';
+import { Queue } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { DataSource, EntityManager } from 'typeorm';
+
+@Injectable()
+export class StockTasks {
+  private readonly taskLogger = {
+    debug: (message: string, ...args: any[]) => console.debug(message, ...args),
+    info: (message: string, ...args: any[]) => console.info(message, ...args),
+  };
+
+  constructor(
+    @InjectQueue('delete-empty-allocations')
+    private deleteEmptyAllocationsQueue: Queue,
+    @InjectQueue('delete-expired-reservations')
+    private deleteExpiredReservationsQueue: Queue,
+    @InjectQueue('update-stocks-quantity-allocated')
+    private updateStocksQuantityAllocatedQueue: Queue,
+    private dataSource: DataSource,
+  ) {}
+
+  async addDeleteEmptyAllocationsTask() {
+    await this.deleteEmptyAllocationsQueue.add('deleteEmptyAllocations', {});
+  }
+
+  async addDeleteExpiredReservationsTask() {
+    await this.deleteExpiredReservationsQueue.add('deleteExpiredReservations', {});
+  }
+
+  async addUpdateStocksQuantityAllocatedTask() {
+    await this.updateStocksQuantityAllocatedQueue.add('updateStocksQuantityAllocated', {});
+  }
+
+  async deleteEmptyAllocations() {
+    let count = 0;
+    await this.dataSource.transaction(async (entityManager: EntityManager) => {
+      const idsToDelete = await entityManager
+        .createQueryBuilder()
+        .select('id')
+        .from('allocation', 'allocation')
+        .where('allocation.quantity_allocated = :quantity', { quantity: 0 })
+        .getMany();
+
+      if (idsToDelete.length > 0) {
+        const deleteResult = await entityManager
+          .createQueryBuilder()
+          .delete()
+          .from('allocation')
+          .whereInIds(idsToDelete)
+          .execute();
+
+        count = deleteResult.affected || 0;
+      }
+    });
+
+    if (count) {
+      this.taskLogger.debug(`Removed ${count} allocations`);
+    }
+  }
+
+  async deleteExpiredReservations() {
+    let stockReservations = 0;
+    let preorderReservations = 0;
+
+    await this.dataSource.transaction(async (entityManager: EntityManager) => {
+      const stockReservationDeleteResult = await entityManager
+        .createQueryBuilder()
+        .delete()
+        .from('reservation')
+        .where('reserved_until < :now', { now: new Date() })
+        .execute();
+
+      stockReservations = stockReservationDeleteResult.affected || 0;
+
+      const preorderReservationDeleteResult = await entityManager
+        .createQueryBuilder()
+        .delete()
+        .from('preorder_reservation')
+        .where('reserved_until < :now', { now: new Date() })
+        .execute();
+      preorderReservations = preorderReservationDeleteResult.affected || 0;
+    });
+
+    if (stockReservations || preorderReservations) {
+      this.taskLogger.debug(
+        `Removed ${stockReservations} stock reservations and ${preorderReservations} preorder reservations`,
+      );
+    }
+  }
+
+  async updateStocksQuantityAllocated() {
+    const stocksToUpdate = [];
+
+    await this.dataSource.transaction(async (entityManager: EntityManager) => {
+      const mismatchedStocks = await entityManager
+        .createQueryBuilder()
+        .select('stock')
+        .from('stock', 'stock')
+        .leftJoin(
+          'stock.allocations',
+          'allocations',
+          'allocations.stock_id = stock.id',
+        )
+        .groupBy('stock.id')
+        .addGroupBy('stock.quantity_allocated')
+        .addSelect('COALESCE(SUM(allocations.quantity_allocated), 0)', 'allocations_allocated')
+        .having('stock.quantity_allocated <> COALESCE(SUM(allocations.quantity_allocated), 0)')
+        .getRawMany();
+
+      for (const mismatchedStock of mismatchedStocks) {\n          const allocationsAllocated = mismatchedStock.allocations_allocated !== null ? parseFloat(mismatchedStock.allocations_allocated) : 0;
+
+        this.taskLogger.info(
+          `Mismatch updating quantity_allocated: stock ${mismatchedStock.stock_id} had ${mismatchedStock.stock_quantity_allocated} allocated, but should have ${allocationsAllocated}.`,
+        );
+
+        await entityManager
+          .createQueryBuilder()
+          .update('stock')
+          .set({ quantity_allocated: allocationsAllocated })
+          .where('id = :id', { id: mismatchedStock.stock_id })
+          .execute();
+
+        stocksToUpdate.push(mismatchedStock.stock_id);
+      }
+    });
+
+    this.taskLogger.info(
+      `Finished updating quantity_allocated on stocks, ${stocksToUpdate.length} were corrected.`,
+    );
+  }
+}

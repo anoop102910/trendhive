@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VoucherType {
+  ENTIRE_ORDER
+  SPECIFIC_PRODUCT
+  SHIPPING
+}
+
+enum DiscountValueType {
+  FIXED
+  PERCENTAGE
+}
+
+enum RewardValueType {
+  FIXED
+  PERCENTAGE
+}
+
+enum RewardType {
+  SUBTOTAL
+  LINE_ITEM
+}
+
+enum PromotionType {
+  CATALOGUE
+  ORDER
+}
+
+enum DiscountType {
+  MANUAL
+  AUTOMATIC
+  VOUCHER
+  PROMOTION
+}
+
+enum PromotionEvents {
+  PROMOTION_CREATED
+  PROMOTION_UPDATED
+  PROMOTION_DELETED
+  PROMOTION_STARTED
+  PROMOTION_ENDED
+  RULE_CREATED
+  RULE_UPDATED
+  RULE_DELETED
+}
+
+model Voucher {
+  id                         Int                         @id @default(autoincrement())
+  type                       String                      @default("ENTIRE_ORDER")
+  name                       String?                      @map("name")
+  usage_limit                Int?                       @map("usage_limit")
+  start_date                 DateTime                    @default(now())
+  end_date                   DateTime?                    @map("end_date")
+  apply_once_per_order       Boolean                     @default(false)
+  apply_once_per_customer    Boolean                     @default(false)
+  single_use                 Boolean                     @default(false)
+  only_for_staff             Boolean                     @default(false)
+  discount_value_type        String                      @default("FIXED")
+  countries                  String[]
+  min_checkout_items_quantity Int?                       @map("min_checkout_items_quantity")
+  products                   Product[]                   @relation(name: "VoucherProducts")
+  variants                   ProductVariant[]            @relation(name: "VoucherVariants")
+  collections                Collection[]                @relation(name: "VoucherCollections")
+  categories                 Category[]                  @relation(name: "VoucherCategories")
+  codes                      VoucherCode[]               @relation(name: "VoucherToVoucherCode")
+  channel_listings           VoucherChannelListing[]     @relation(name: "VoucherToVoucherChannelListing")
+  translations               VoucherTranslation[]        @relation(name: "VoucherToVoucherTranslation")
+  orderdiscounts             OrderDiscount[]
+  orderlinediscounts         OrderLineDiscount[]
+  checkoutdiscounts          CheckoutDiscount[]
+  checkoutlinediscounts      CheckoutLineDiscount[]
+
+  @@map("discount_voucher")
+}
+
+model VoucherCode {
+  id             String            @id @unique @default(uuid())
+  code           String            @unique @db.Text @map("code")
+  used           Int             @default(0)
+  is_active      Boolean           @default(true)
+  voucher        Voucher           @relation(name: "VoucherToVoucherCode", fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId      Int             @map("voucher_id") @db.Integer
+  created_at     DateTime          @default(now())
+  customers      VoucherCustomer[] @relation(name: "VoucherCodeToVoucherCustomer")
+
+  @@index([voucherId], name: "vouchercode_voucher_idx")
+  @@map("discount_vouchercode")
+}
+
+model VoucherChannelListing {
+  voucher         Voucher @relation(name: "VoucherToVoucherChannelListing", fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId       Int     @map("voucher_id") @db.Integer
+  channel         Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId       Int     @map("channel_id") @db.Integer
+  discount_value  Decimal @db.Decimal
+  currency        String  @db.VarChar(3)
+  min_spent_amount Decimal? @db.Decimal @map("min_spent_amount")
+
+  @@id([voucherId, channelId])
+  @@unique([voucherId, channelId])
+  @@map("discount_voucherchannellisting")
+}
+
+model VoucherCustomer {
+  voucher_code   VoucherCode @relation(name: "VoucherCodeToVoucherCustomer", fields: [voucher_codeId], references: [id], onDelete: Cascade)
+  voucher_codeId String      @map("voucher_code_id")
+  customer_email String      @db.VarChar(254)
+
+  @@id([voucher_codeId, customer_email])
+  @@unique([voucher_codeId, customer_email])
+  @@index([voucher_codeId], name: "vouchercustomer_voucher_code_idx")
+  @@map("discount_vouchercustomer")
+}
+
+model VoucherTranslation {
+  id            Int      @id @default(autoincrement())
+  language_code String   @db.VarChar(10)
+  voucher         Voucher @relation(name: "VoucherToVoucherTranslation", fields: [voucherId], references: [id], onDelete: Cascade)
+  voucherId       Int   @map("voucher_id") @db.Integer
+  name          String?   @map("name")
+
+  @@unique([language_code, voucherId])
+  @@map("discount_vouchertranslation")
+}
+
+model Promotion {
+  id                         String                  @id @unique @default(uuid())
+  name                       String                  @db.VarChar(255)
+  type                       String                  @default("CATALOGUE")
+  description                Json?                   @map("description")
+  old_sale_id                Int?                    @unique @map("old_sale_id")
+  start_date                 DateTime                @default(now())
+  end_date                   DateTime?                    @map("end_date")
+  created_at                 DateTime                @default(now())
+  updated_at                 DateTime                @default(now())
+  last_notification_scheduled_at DateTime?           @map("last_notification_scheduled_at")
+  translations               PromotionTranslation[]  @relation(name: "PromotionToPromotionTranslation")
+  rules                      PromotionRule[]         @relation(name: "PromotionToPromotionRule")
+  events                     PromotionEvent[]        @relation(name: "PromotionToPromotionEvent")
+  orderdiscounts             OrderDiscount[]
+  orderlinediscounts         OrderLineDiscount[]
+  checkoutdiscounts          CheckoutDiscount[]
+  checkoutlinediscounts      CheckoutLineDiscount[]
+
+  @@index([start_date], name: "start_date_idx")
+  @@index([end_date], name: "end_date_idx")
+  @@map("discount_promotion")
+}
+
+model PromotionTranslation {
+  id            Int       @id @default(autoincrement())
+  language_code String    @db.VarChar(10)
+  name          String?    @map("name")
+  description   Json?     @map("description")
+  promotion       Promotion @relation(name: "PromotionToPromotionTranslation", fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId   String    @map("promotion_id")
+
+  @@unique([language_code, promotionId])
+  @@map("discount_promotiontranslation")
+}
+
+model PromotionRule {
+  id                    String                 @id @unique @default(uuid())
+  name                  String?                @db.VarChar(255)
+  description           Json?                  @map("description")
+  promotion             Promotion              @relation(name: "PromotionToPromotionRule", fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId           String                 @map("promotion_id")
+  channels              Channel[]
+  catalogue_predicate   Json                   @default("{}")
+  order_predicate       Json                   @default("{}")
+  variants              PromotionRule_Variants[]
+  reward_value_type     String?                @map("reward_value_type")
+  reward_value          Decimal?               @db.Decimal @map("reward_value")
+  reward_type           String?                @map("reward_type")
+  gifts                 ProductVariant[]       @relation(name: "PromotionRuleToProductVariant")
+  old_channel_listing_id Int?                   @unique @map("old_channel_listing_id")
+  variants_dirty        Boolean                @default(false)
+  translations          PromotionRuleTranslation[] @relation(name: "PromotionRuleToPromotionRuleTranslation")
+  orderdiscounts             OrderDiscount[]
+  orderlinediscounts         OrderLineDiscount[]
+  checkoutdiscounts          CheckoutDiscount[]
+  checkoutlinediscounts      CheckoutLineDiscount[]
+
+  @@map("discount_promotionrule")
+}
+
+model PromotionRule_Variants {
+  id               BigInt           @id @unique @default(autoincrement())
+  promotionrule   PromotionRule @relation(fields: [promotionruleId], references: [id], onDelete: Cascade)
+  promotionruleId String
+  productvariant ProductVariant @relation(fields: [productvariantId], references: [id], onDelete: Cascade)
+  productvariantId Int
+
+  @@map("discount_promotionrule_variants")
+}
+
+model PromotionRuleTranslation {
+  id              Int           @id @default(autoincrement())
+  language_code String        @db.VarChar(10)
+  name            String?        @map("name")
+  description     Json?         @map("description")
+  promotion_rule  PromotionRule @relation(name: "PromotionRuleToPromotionRuleTranslation", fields: [promotion_ruleId], references: [id], onDelete: Cascade)
+  promotion_ruleId String      @map("promotion_rule_id")
+
+  @@unique([language_code, promotion_ruleId])
+  @@map("discount_promotionruletranslation")
+}
+
+abstract model BaseDiscount {
+  id             String  @id @unique @default(uuid())
+  created_at     DateTime @default(now())
+  type           String  @default("MANUAL")
+  value_type     String  @default("FIXED")
+  value          Decimal @db.Decimal @default(0.0)
+  amount_value   Decimal @db.Decimal @default(0.0)
+  currency       String  @db.VarChar(3)
+  name           String?  @map("name")
+  translated_name String?  @map("translated_name")
+  reason         String? @db.Text
+  promotion_ruleId String? @map("promotion_rule_id")
+  promotion_rule PromotionRule? @relation(fields: [promotion_ruleId], references: [id])
+  voucherId Int? @map("voucher_id") @db.Integer
+  voucher Voucher? @relation(fields: [voucherId], references: [id])
+  voucher_code String? @map("voucher_code")
+}
+
+model OrderDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  orderId Int? @map("order_id")
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  old_id  Int? @unique @map("old_id")
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@index([promotion_ruleId])
+  @@map("discount_orderdiscount")
+}
+
+model OrderLineDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  lineId Int? @map("line_id")
+  line  OrderLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  unique_type String? @map("unique_type")
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@unique([lineId, unique_type], name: "unique_orderline_discount_type")
+  @@index([promotion_ruleId])
+  @@map("discount_orderlinediscount")
+}
+
+model CheckoutDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  checkoutId Int? @map("checkout_id")
+  checkout Checkout? @relation(fields: [checkoutId], references: [id], onDelete: Cascade)
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@unique([checkoutId, promotion_ruleId])
+  @@index([promotion_ruleId])
+  @@map("discount_checkoutdiscount")
+}
+
+model CheckoutLineDiscount extends BaseDiscount {
+  id String @id @default(uuid())
+  lineId Int? @map("line_id")
+  line CheckoutLine? @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  unique_type String? @map("unique_type")
+  promotion_rule   PromotionRule?  @relation(fields: [promotion_ruleId], references: [id])
+  Promotion Promotion? @relation(fields: [promotionId], references: [id])
+  promotionId String?
+  @@unique([lineId, unique_type], name: "unique_checkoutline_discount_type")
+  @@index([promotion_ruleId])
+  @@map("discount_checkoutlinediscount")
+}
+
+model PromotionEvent {
+  id          String   @id @unique @default(uuid())
+  date        DateTime @default(now())
+  type        String   @db.VarChar(255)
+  parameters  Json     @default("{}")
+  userId      String?   @map("user_id")
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  appId       String?    @map("app_id")
+  app         App?       @relation(fields: [appId], references: [id], onDelete: SetNull)
+  promotion   Promotion @relation(name: "PromotionToPromotionEvent", fields: [promotionId], references: [id], onDelete: Cascade)
+  promotionId String
+
+  @@map("discount_promotionevent")
+}
+
+model Channel {
+  id                     Int                      @id @default(autoincrement())
+  VoucherChannelListing VoucherChannelListing[]  @relation(name: "VoucherChannelListingToChannel")
+  PromotionRule         PromotionRule[]
+}
+
+model Product {
+  id        Int       @id @default(autoincrement())
+  vouchers Voucher[] @relation(name: "VoucherProducts")
+}
+
+model ProductVariant {
+  id               Int               @id @default(autoincrement())
+  vouchers       Voucher[]         @relation(name: "VoucherVariants")
+  promotionRules PromotionRule[]    @relation(name: "PromotionRuleToProductVariant")
+}
+
+model Collection {
+  id        Int       @id @default(autoincrement())
+  vouchers Voucher[] @relation(name: "VoucherCollections")
+}
+
+model Category {
+  id        Int       @id @default(autoincrement())
+  vouchers Voucher[] @relation(name: "VoucherCategories")
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+  discounts OrderDiscount[]
+}
+
+model OrderLine {
+  id Int @id @default(autoincrement())
+  discounts OrderLineDiscount[]
+}
+
+model Checkout {
+  id Int @id @default(autoincrement())
+  discounts CheckoutDiscount[]
+}
+
+model CheckoutLine {
+  id Int @id @default(autoincrement())
+  discounts CheckoutLineDiscount[]
+}
+
+model App {
+  id String @id
+  promotion_events PromotionEvent[]
+}
+
+model User {
+  id String @id
+  promotion_events PromotionEvent[]
+}
