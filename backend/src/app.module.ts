@@ -9,6 +9,8 @@ import { S3Module } from './client/s3/s3.module';
 import { ProductModule } from './product/product.module';
 import { CollectionModule } from './collection/collection.module';
 import { AttributeModule } from './attribute/attribute.module';
+import { UserModule } from './user/user.module';
+import { CouponModule } from './coupon/coupon.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { AttributeModule } from './attribute/attribute.module';
     S3Module,
     CollectionModule,
     AttributeModule,
+    UserModule,
+    CouponModule,
   ],
   controllers: [AppController],
   providers: [AppService],

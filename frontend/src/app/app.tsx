@@ -15,6 +15,8 @@ import { CollectionCreate, CollectionEdit } from "./pages/collection/CollectionF
 import { dataProvider } from "./providers/data-provider";
 import { AttributeList } from "./pages/attribute/AttributeList";
 import { AttributeForm } from "./pages/attribute/AttributeForm";
+import { CouponList } from "./pages/coupon/CouponList";
+import { CouponForm } from "./pages/coupon/CouponForm";
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -51,6 +53,12 @@ export default function App() {
               create: "/attributes/create",
               edit: "/attributes/edit/:id",
             },
+            {
+              name: "coupon",
+              list: "/coupon",
+              create: "/coupon/create",
+              edit: "/coupon/edit/:id",
+            },
           ]}
         >
           <Routes>
@@ -83,6 +91,11 @@ export default function App() {
                 <Route index element={<AttributeList />} />
                 <Route path="create" element={<AttributeForm />} />
                 <Route path="edit/:id" element={<AttributeForm />} />
+              </Route>
+              <Route path="/coupon">
+                <Route index element={<CouponList />} />
+                <Route path="create" element={<CouponForm />} />
+                <Route path="edit/:id" element={<CouponForm />} />
               </Route>
             </Route>
 
