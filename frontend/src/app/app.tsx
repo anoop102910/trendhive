@@ -24,6 +24,8 @@ import {
   CoffeeOutlined,
   GiftOutlined,
 } from "@ant-design/icons";
+import { CartPage } from "./pages/store/cart/CartPage";
+import { ProductGallery } from "./pages/store/product/Gallery";
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -71,6 +73,14 @@ export default function App() {
               edit: "/coupons/edit/:id",
               icon: <GiftOutlined />,
             },
+            {
+              name: "cart",
+              list: "/cart",
+            },
+            {
+              name: "gallery",
+              list: "/gallery",
+            },
           ]}
         >
           <Routes>
@@ -108,6 +118,12 @@ export default function App() {
                 <Route index element={<CouponList />} />
                 <Route path="create" element={<CouponForm />} />
                 <Route path="edit/:id" element={<CouponForm />} />
+              </Route>
+              <Route path="/cart">
+                <Route index element={<CartPage />} />
+              </Route>
+              <Route path="/gallery">
+                <Route index element={<ProductGallery />} />
               </Route>
             </Route>
 

@@ -27,6 +27,8 @@ model User {
   sessions                 Session[]
   accounts                 Account[]
   UserCoupon               UserCoupon[]
+  Cart                     Cart[]
+  Wishlist                 Wishlist?
 
   @@map("user")
 }
@@ -160,6 +162,8 @@ model Product {
   collectionId      String?
   ProductAttribute  ProductAttribute[]
   ProductCoupon     ProductCoupon[]
+  CartItem          CartItem[]
+  WishlistItem      WishlistItem[]
 }
 
 model CollectionProduct {
@@ -245,4 +249,46 @@ model ProductCoupon {
   productId String
   coupon    Coupon  @relation(fields: [couponId], references: [id])
   couponId  String
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+  user      User       @relation(fields: [userId], references: [id])
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  quantity  Int
+  productId String
+  cartId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+  cart    Cart    @relation(fields: [cartId], references: [id])
+
+  @@unique([cartId, productId])
+}
+
+model Wishlist {
+  id        String         @id @default(uuid())
+  userId    String         @unique
+  createdAt DateTime       @default(now())
+  items     WishlistItem[]
+  user      User           @relation(fields: [userId], references: [id])
+}
+
+model WishlistItem {
+  id         String @id @default(uuid())
+  productId  String
+  wishlistId String
+
+  product  Product  @relation(fields: [productId], references: [id])
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id])
+
+  @@unique([wishlistId, productId])
 }

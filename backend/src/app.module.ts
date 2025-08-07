@@ -11,6 +11,7 @@ import { CollectionModule } from './collection/collection.module';
 import { AttributeModule } from './attribute/attribute.module';
 import { UserModule } from './user/user.module';
 import { CouponModule } from './coupon/coupon.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CouponModule } from './coupon/coupon.module';
     AttributeModule,
     UserModule,
     CouponModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -36,4 +36,22 @@ export const dataProvider: DataProvider = {
   },
 
   getApiUrl: () => API_URL,
+
+  custom: async ({ url, method, filters, sorters, payload, query, headers }) => {
+    const { data } = await api.request({
+      url,
+      method: method?.toUpperCase(),
+      params: {
+        filters,
+        sorters,
+        ...query,
+      },
+      data: payload,
+      headers,
+    });
+
+    return {
+      data,
+    };
+  },
 };
