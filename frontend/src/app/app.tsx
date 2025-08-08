@@ -17,6 +17,8 @@ import { AttributeList } from "./pages/attribute/AttributeList";
 import { AttributeForm } from "./pages/attribute/AttributeForm";
 import { CouponList } from "./pages/coupon/CouponList";
 import { CouponForm } from "./pages/coupon/CouponForm";
+import { DiscountList } from "./pages/discount/DiscountList";
+import { DiscountForm } from "./pages/discount/DiscountForm";
 import {
   AppstoreOutlined,
   ShoppingOutlined,
@@ -24,8 +26,6 @@ import {
   CoffeeOutlined,
   GiftOutlined,
 } from "@ant-design/icons";
-import { CartPage } from "./pages/store/cart/CartPage";
-import { ProductGallery } from "./pages/store/product/Gallery";
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -74,12 +74,11 @@ export default function App() {
               icon: <GiftOutlined />,
             },
             {
-              name: "cart",
-              list: "/cart",
-            },
-            {
-              name: "gallery",
-              list: "/gallery",
+              name: "discount",
+              list: "/discount",
+              create: "/discount/create",
+              edit: "/discount/edit/:id",
+              icon: <GiftOutlined />,
             },
           ]}
         >
@@ -119,11 +118,10 @@ export default function App() {
                 <Route path="create" element={<CouponForm />} />
                 <Route path="edit/:id" element={<CouponForm />} />
               </Route>
-              <Route path="/cart">
-                <Route index element={<CartPage />} />
-              </Route>
-              <Route path="/gallery">
-                <Route index element={<ProductGallery />} />
+              <Route path="/discount">
+                <Route index element={<DiscountList />} />
+                <Route path="create" element={<DiscountForm />} />
+                <Route path="edit/:id" element={<DiscountForm />} />
               </Route>
             </Route>
 

@@ -12,6 +12,7 @@ import { AttributeModule } from './attribute/attribute.module';
 import { UserModule } from './user/user.module';
 import { CouponModule } from './coupon/coupon.module';
 import { CartModule } from './cart/cart.module';
+import { AddressModule } from './address/address.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { CartModule } from './cart/cart.module';
     UserModule,
     CouponModule,
     CartModule,
+    AddressModule,
   ],
   controllers: [AppController],
   providers: [AppService],

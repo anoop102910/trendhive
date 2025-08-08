@@ -1,4 +1,4 @@
-import { Refine, Authenticated, useLogout } from "@refinedev/core";
+import { Refine, Authenticated } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router";
 import { authProvider } from "./providers/auth-provider";
@@ -8,6 +8,9 @@ import { dataProvider } from "./providers/data-provider";
 import LandingPage from "./pages/home";
 import Layout from "./components/layout";
 import ShopPage from "./pages/shop";
+import { shadcnNotificationProvider } from "./providers/notification-provider";
+import { CartPage } from "./pages/cart";
+import { CheckoutPage } from "./pages/checkout";
 
 export default function App() {
   return (
@@ -16,6 +19,7 @@ export default function App() {
         dataProvider={dataProvider}
         authProvider={authProvider}
         routerProvider={routerProvider}
+        notificationProvider={shadcnNotificationProvider}
       >
         <Routes>
           <Route
@@ -24,7 +28,12 @@ export default function App() {
                 <Outlet />
               </Authenticated>
             }
-          ></Route>
+          >
+            <Route element={<Layout />}>
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
+            </Route>
+          </Route>
 
           <Route element={<Layout />}>
             <Route index element={<LandingPage />} />

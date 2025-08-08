@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useList } from "@refinedev/core";
+import { useList, useCustomMutation, useApiUrl } from "@refinedev/core";
 import { Link } from "react-router-dom";
 import { ShoppingCart, Heart } from "lucide-react";
 
@@ -27,12 +27,19 @@ interface Category {
   name: string;
 }
 
-const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
+const ProductCard: React.FC<{
+  product: Product;
+  onAddToCart: (productId: string) => void;
+  isAddingToCart: boolean;
+}> = ({ product, onAddToCart, isAddingToCart }) => {
   return (
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+    <div className="bg-white  overflow-hidden">
       <Link to={`/shop/${product.slug}`}>
         <img
-          src={`https://images.unsplash.com/photo-1515555431631-f18e9575b63b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1770&q=80`}
+          src={
+            product.image ||
+            "https://tse1.mm.bing.net/th/id/OIP.Vui1gAtnHmqJTYC5Xi0kMgHaFC?r=0&rs=1&pid=ImgDetMain&o=7&rm=3"
+          }
           alt={product.name}
           className="w-full h-64 object-cover"
         />
@@ -44,8 +51,9 @@ const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
           <Button variant="outline" size="icon">
             <Heart className="h-4 w-4" />
           </Button>
-          <Button>
-            <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
+          <Button onClick={() => onAddToCart(product.id)} disabled={isAddingToCart}>
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            {isAddingToCart ? "Adding..." : "Add to Cart"}
           </Button>
         </div>
       </div>
@@ -54,6 +62,7 @@ const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
 };
 
 const ShopPage: React.FC = () => {
+  const apiUrl = useApiUrl();
   const [filters, setFilters] = useState<{ categories: string[]; priceRange: number[] }>({
     categories: [],
     priceRange: [0, 1000],
@@ -74,6 +83,18 @@ const ShopPage: React.FC = () => {
 
   const { data: categoriesData } = useList<Category>({ resource: "categories" });
   const categories = categoriesData?.data || [];
+
+  const { mutate, isPending: isAddingToCart } = useCustomMutation();
+  const [addedProductId, setAddedProductId] = useState<string | null>(null);
+
+  const handleAddToCart = (productId: string) => {
+    setAddedProductId(productId);
+    mutate({
+      url: `${apiUrl}/cart`,
+      method: "post",
+      values: { productId, quantity: 1 },
+    });
+  };
 
   const handleCategoryChange = (categoryId: string) => {
     setFilters(prev => ({
@@ -155,7 +176,12 @@ const ShopPage: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
         {products.map(product => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            onAddToCart={handleAddToCart}
+            isAddingToCart={isAddingToCart && addedProductId === product.id}
+          />
         ))}
       </div>
     </div>

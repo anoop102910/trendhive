@@ -1,7 +1,7 @@
 import { API_URL } from "@/config";
 import { type AuthProvider } from "@refinedev/core";
 import axios from "axios";
-
+import { api } from "./api";
 
 export const authProvider: AuthProvider = {
   check: async () => {
@@ -25,6 +25,10 @@ export const authProvider: AuthProvider = {
   logout: async () => {
     localStorage.removeItem("access_token");
     return { success: true };
+  },
+  getIdentity: async () => {
+    const response = await api.get("/auth/me");
+    return response.data;
   },
   onError: async error => {
     if (error?.status === 401) {

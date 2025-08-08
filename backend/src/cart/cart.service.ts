@@ -51,13 +51,13 @@ export class CartService {
       });
     }
 
-    return cart;
+    return { data: cart };
   }
 
   async updateCart(userId: string, updateCartDto: UpdateCartDto) {
     const { productId, quantity } = updateCartDto;
 
-    const cart = await this.getCart(userId);
+    const { data: cart } = await this.getCart(userId);
 
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -130,5 +130,13 @@ export class CartService {
     });
 
     return { message: 'Item removed successfully' };
+  }
+
+  async clearCart(userId: string) {
+    await this.prisma.cart.delete({
+      where: {
+        userId,
+      },
+    });
   }
 }

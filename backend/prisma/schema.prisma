@@ -29,6 +29,8 @@ model User {
   UserCoupon               UserCoupon[]
   Cart                     Cart[]
   Wishlist                 Wishlist?
+  Address                  Address[]
+  Order                    Order[]
 
   @@map("user")
 }
@@ -164,6 +166,9 @@ model Product {
   ProductCoupon     ProductCoupon[]
   CartItem          CartItem[]
   WishlistItem      WishlistItem[]
+  Discount          Discount?           @relation(fields: [discountId], references: [id])
+  discountId        String?
+  OrderItem         OrderItem[]
 }
 
 model CollectionProduct {
@@ -291,4 +296,81 @@ model WishlistItem {
   wishlist Wishlist @relation(fields: [wishlistId], references: [id])
 
   @@unique([wishlistId, productId])
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  addressLine1 String   @db.VarChar(1024)
+  addressLine2 String?  @db.VarChar(1024)
+  city         String   @db.VarChar(255)
+  state        String   @db.VarChar(255)
+  postalCode   String   @db.VarChar(20)
+  country      String   @db.VarChar(255)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  Order        Order[]
+
+  @@map("address")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  FREE_SHIPPING
+}
+
+model Discount {
+  id          String       @id @default(uuid())
+  name        String       @db.VarChar(255)
+  description String?      @db.Text
+  type        DiscountType @default(PERCENTAGE)
+  value       Float
+  startDate   DateTime     @default(now())
+  endDate     DateTime?
+  isActive    Boolean      @default(true)
+
+  products Product[]
+
+  @@map("discounts")
+}
+
+model Order {
+  id             String   @id @default(uuid())
+  grossAmount    Float
+  discountAmount Float    @default(0.00)
+  shippingFee    Float    @default(0.00)
+  taxAmount      Float    @default(0.00)
+  totalAmount    Float
+  status         String   @default("PENDING") @db.VarChar(50)
+  paymentMethod  String   @db.VarChar(50)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  addressId String
+  address   Address @relation(fields: [addressId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  items OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  quantity  Int
+  price     Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
 }

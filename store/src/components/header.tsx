@@ -1,5 +1,7 @@
+import React from "react";
 import { Link } from "react-router-dom";
-import { ShoppingCart, Search } from "lucide-react";
+import { ShoppingCart, Search, Home } from "lucide-react";
+import { useLogout, useGetIdentity } from "@refinedev/core";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const Header = ({ isLoggedIn = false, user = null }) => {
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  avatar?: string;
+}
+
+const Header: React.FC = () => {
+  const { mutate: logout } = useLogout();
+  const { data: user } = useGetIdentity<User>();
+  const isLoggedIn = !!user;
+
+  const handleLogout = () => {
+    logout();
+  };
+
   return (
     <header className="bg-white text-gray-900 border-b">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -43,8 +60,17 @@ const Header = ({ isLoggedIn = false, user = null }) => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar className="h-8 w-8 cursor-pointer">
-                  <AvatarImage src={user?.avatar || "https://github.com/shadcn.png"} />
-                  <AvatarFallback>CN</AvatarFallback>
+                  <AvatarImage
+                    src={
+                      user?.avatar ||
+                      `https://ui-avatars.com/api/?name=${
+                        user?.name || user?.email
+                      }&background=random&color=fff`
+                    }
+                  />
+                  <AvatarFallback>
+                    {user?.name?.charAt(0) || user?.email?.charAt(0) || "U"}
+                  </AvatarFallback>
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -60,7 +86,7 @@ const Header = ({ isLoggedIn = false, user = null }) => {
                   <Link to="/wishlist">Wishlist</Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Logout</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (

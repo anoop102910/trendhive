@@ -50,8 +50,6 @@ export const dataProvider: DataProvider = {
       headers,
     });
 
-    return {
-      data,
-    };
+    return data
   },
 };
