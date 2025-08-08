@@ -1,0 +1,2 @@
+name,slug,description,price,currency,quantity,sku,isPublished,isFeatured,categoryId
+Sample Product 1,sample-product-1,This is a sample product.,100,IND,10,SKU-001,true,false,

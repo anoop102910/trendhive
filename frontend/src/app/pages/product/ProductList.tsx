@@ -1,17 +1,38 @@
-import { List, EditButton, DeleteButton, useTable } from "@refinedev/antd";
+import { List, EditButton, DeleteButton, useTable, ImportButton } from "@refinedev/antd";
 import { Table, Space } from "antd";
 import type { IResourceComponentsProps } from "@refinedev/core";
 import { TagField } from "@refinedev/antd";
+import { useState } from "react";
+import { ProductImport } from "../../../components/ProductImport";
 
 export const ProductList: React.FC<IResourceComponentsProps> = () => {
-  const { tableProps } = useTable({
+  const { tableProps, tableQueryResult } = useTable({
     syncWithLocation: true,
   });
+  const [isImportModalVisible, setIsImportModalVisible] = useState(false);
+
+  const showImportModal = () => {
+    setIsImportModalVisible(true);
+  };
+
+  const handleImportSuccess = () => {
+    setIsImportModalVisible(false);
+    tableQueryResult.refetch();
+  };
+
+  const handleImportCancel = () => {
+    setIsImportModalVisible(false);
+  };
 
   return (
-    <List>
-      <Table {...tableProps} rowKey="id">
-        <Table.Column dataIndex="name" title="Name" />
+    <>
+      <List
+        headerButtons={() => (
+          <ImportButton onClick={showImportModal}>Import</ImportButton>
+        )}
+      >
+        <Table {...tableProps} rowKey="id">
+          <Table.Column dataIndex="name" title="Name" />
         <Table.Column dataIndex="slug" title="Slug" />
         <Table.Column dataIndex="price" title="Price" render={value => `₹${value.toFixed(2)}`} />
         <Table.Column dataIndex="quantity" title="Quantity" />
@@ -44,5 +65,11 @@ export const ProductList: React.FC<IResourceComponentsProps> = () => {
         />
       </Table>
     </List>
+    <ProductImport
+        visible={isImportModalVisible}
+        onCancel={handleImportCancel}
+        onSuccess={handleImportSuccess}
+      />
+    </>
   );
 };
