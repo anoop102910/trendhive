@@ -1,6 +1,7 @@
 // order.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OrderCodeEnum } from './order.code';
 import { CreateOrderDto } from './order.dto';
 import { AddressService } from 'src/address/address.service';
 import { CartService } from 'src/cart/cart.service';
@@ -67,7 +68,10 @@ export class OrderService {
       where: { id },
     });
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException({
+        message: 'Order not found',
+        code: OrderCodeEnum.ORDER_NOT_FOUND,
+      });
     }
     return { data: order };
   }

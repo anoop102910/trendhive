@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { UserCodeEnum } from './user.code';
 import { QueryParams } from 'src/utils/query-params';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
 
@@ -70,7 +71,10 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException({
+        message: 'User not found',
+        code: UserCodeEnum.USER_NOT_FOUND,
+      });
     }
 
     // Remove sensitive data

@@ -2,6 +2,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAddressDto, UpdateAddressDto } from './address.dto';
+import { AddressCodeEnum } from './address.code';
 
 @Injectable()
 export class AddressService {
@@ -29,7 +30,10 @@ export class AddressService {
       where: { id },
     });
     if (!address) {
-      throw new NotFoundException('Address not found');
+      throw new NotFoundException({
+        message: 'Address not found',
+        code: AddressCodeEnum.ADDRESS_NOT_FOUND,
+      });
     }
     return { data: address };
   }
@@ -39,7 +43,10 @@ export class AddressService {
       where: { id },
     });
     if (!exists) {
-      throw new NotFoundException('Address not found');
+      throw new NotFoundException({
+        message: 'Address not found',
+        code: AddressCodeEnum.ADDRESS_NOT_FOUND,
+      });
     }
     return {
       data: await this.prisma.address.update({
@@ -54,7 +61,10 @@ export class AddressService {
       where: { id },
     });
     if (!exists) {
-      throw new NotFoundException('Address not found');
+      throw new NotFoundException({
+        message: 'Address not found',
+        code: AddressCodeEnum.ADDRESS_NOT_FOUND,
+      });
     }
     return this.prisma.address.delete({
       where: { id },

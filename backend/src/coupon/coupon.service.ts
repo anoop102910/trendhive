@@ -5,6 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CouponCodeEnum } from './coupon.code';
 import { CreateCouponDto, UpdateCouponDto } from './coupon.dto';
 import { QueryParams } from 'src/utils/query-params';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
@@ -19,7 +20,10 @@ export class CouponService {
     });
 
     if (existingCoupon) {
-      throw new ConflictException('Coupon with this code already exists');
+      throw new ConflictException({
+        message: 'Coupon with this code already exists',
+        code: CouponCodeEnum.COUPON_CODE_ALREADY_EXISTS,
+      });
     }
 
     const { productIds, userIds, ...couponData } = createCouponDto;
@@ -120,7 +124,10 @@ export class CouponService {
     });
 
     if (!coupon) {
-      throw new NotFoundException('Coupon not found');
+      throw new NotFoundException({
+        message: 'Coupon not found',
+        code: CouponCodeEnum.COUPON_NOT_FOUND,
+      });
     }
 
     return { data: coupon };
@@ -132,7 +139,10 @@ export class CouponService {
     });
 
     if (!exists) {
-      throw new NotFoundException('Coupon not found');
+      throw new NotFoundException({
+        message: 'Coupon not found',
+        code: CouponCodeEnum.COUPON_NOT_FOUND,
+      });
     }
 
     if (updateCouponDto.code) {
@@ -141,7 +151,10 @@ export class CouponService {
       });
 
       if (existingCoupon && existingCoupon.id !== id) {
-        throw new ConflictException('Coupon with this code already exists');
+        throw new ConflictException({
+          message: 'Coupon with this code already exists',
+          code: CouponCodeEnum.COUPON_CODE_ALREADY_EXISTS,
+        });
       }
     }
 
@@ -149,7 +162,10 @@ export class CouponService {
       if (
         new Date(updateCouponDto.startDate) > new Date(updateCouponDto.endDate)
       ) {
-        throw new BadRequestException('Start date must be before end date');
+        throw new BadRequestException({
+          message: 'Start date must be before end date',
+          code: CouponCodeEnum.INVALID_DATE_RANGE,
+        });
       }
     }
 
@@ -228,7 +244,10 @@ export class CouponService {
     });
 
     if (!exists) {
-      throw new NotFoundException('Coupon not found');
+      throw new NotFoundException({
+        message: 'Coupon not found',
+        code: CouponCodeEnum.COUPON_NOT_FOUND,
+      });
     }
 
     await this.prisma.coupon.delete({

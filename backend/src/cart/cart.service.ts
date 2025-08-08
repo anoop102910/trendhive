@@ -2,6 +2,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateCartDto } from './cart.dto';
+import { CartCodeEnum } from './cart.code';
 
 @Injectable()
 export class CartService {
@@ -65,7 +66,10 @@ export class CartService {
     });
 
     if (!product) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException({
+        message: 'Product not found',
+        code: CartCodeEnum.PRODUCT_NOT_FOUND,
+      });
     }
 
     const existingItem = await this.prisma.cartItem.findFirst({
@@ -114,7 +118,10 @@ export class CartService {
     });
 
     if (!cart) {
-      throw new NotFoundException('Cart not found');
+      throw new NotFoundException({
+        message: 'Cart not found',
+        code: CartCodeEnum.CART_NOT_FOUND,
+      });
     }
 
     const item = await this.prisma.cartItem.findUnique({
@@ -122,7 +129,10 @@ export class CartService {
     });
 
     if (!item) {
-      throw new NotFoundException('Cart item not found');
+      throw new NotFoundException({
+        message: 'Cart item not found',
+        code: CartCodeEnum.CART_ITEM_NOT_FOUND,
+      });
     }
 
     await this.prisma.cartItem.delete({

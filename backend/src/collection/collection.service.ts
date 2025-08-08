@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CollectionCodeEnum } from './collection.code';
 import { CreateCollectionDto, UpdateCollectionDto } from './collection.dto';
 import { QueryParams } from 'src/utils/query-params';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
@@ -19,14 +20,20 @@ export class CollectionService {
       where: { name: collectionData.name },
     });
     if (existingCollection) {
-      throw new ConflictException('Collection with this name already exists');
+      throw new ConflictException({
+        message: 'Collection with this name already exists',
+        code: CollectionCodeEnum.COLLECTION_NAME_ALREADY_EXISTS,
+      });
     }
 
     const existingSlug = await this.prisma.collection.findFirst({
       where: { slug: collectionData.slug },
     });
     if (existingSlug) {
-      throw new ConflictException('Collection with this slug already exists');
+      throw new ConflictException({
+        message: 'Collection with this slug already exists',
+        code: CollectionCodeEnum.COLLECTION_SLUG_ALREADY_EXISTS,
+      });
     }
 
     return this.prisma.collection.create({
@@ -75,7 +82,10 @@ export class CollectionService {
     });
 
     if (!collection) {
-      throw new NotFoundException('Collection not found');
+      throw new NotFoundException({
+        message: 'Collection not found',
+        code: CollectionCodeEnum.COLLECTION_NOT_FOUND,
+      });
     }
 
     return { data: collection };
@@ -94,7 +104,10 @@ export class CollectionService {
     });
 
     if (!collection) {
-      throw new NotFoundException('Collection not found');
+      throw new NotFoundException({
+        message: 'Collection not found',
+        code: CollectionCodeEnum.COLLECTION_NOT_FOUND,
+      });
     }
 
     return { data: collection };
@@ -111,7 +124,10 @@ export class CollectionService {
     });
 
     if (!exists) {
-      throw new NotFoundException('Collection not found');
+      throw new NotFoundException({
+        message: 'Collection not found',
+        code: CollectionCodeEnum.COLLECTION_NOT_FOUND,
+      });
     }
 
     if (collectionData.name) {
@@ -119,7 +135,10 @@ export class CollectionService {
         where: { name: collectionData.name },
       });
       if (existingCollection && existingCollection.id !== id) {
-        throw new ConflictException('Collection with this name already exists');
+        throw new ConflictException({
+          message: 'Collection with this name already exists',
+          code: CollectionCodeEnum.COLLECTION_NAME_ALREADY_EXISTS,
+        });
       }
     }
 
@@ -148,7 +167,10 @@ export class CollectionService {
     });
 
     if (!exists) {
-      throw new NotFoundException('Collection not found');
+      throw new NotFoundException({
+        message: 'Collection not found',
+        code: CollectionCodeEnum.COLLECTION_NOT_FOUND,
+      });
     }
 
     await this.prisma.collection.delete({ where: { id } });
