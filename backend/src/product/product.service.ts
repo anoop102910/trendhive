@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ProductCodeEnum } from './product.code';
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -21,13 +22,19 @@ export class ProductService {
       where: { name: createProductDto.name },
     });
     if (existingProduct) {
-      throw new ConflictException('Product with this name already exists');
+      throw new ConflictException({
+        message: 'Product with this name already exists',
+        code: ProductCodeEnum.PRODUCT_NAME_ALREADY_EXISTS,
+      });
     }
     const existingSlug = await this.prisma.product.findUnique({
       where: { slug: createProductDto.slug },
     });
     if (existingSlug) {
-      throw new ConflictException('Product with this slug already exists');
+      throw new ConflictException({
+        message: 'Product with this slug already exists',
+        code: ProductCodeEnum.PRODUCT_SLUG_ALREADY_EXISTS,
+      });
     }
 
     if (createProductDto.categoryId) {
@@ -35,7 +42,10 @@ export class ProductService {
         where: { id: createProductDto.categoryId },
       });
       if (!category) {
-        throw new NotFoundException('Category not found');
+        throw new NotFoundException({
+          message: 'Category not found',
+          code: ProductCodeEnum.CATEGORY_NOT_FOUND,
+        });
       }
     }
 
@@ -75,7 +85,10 @@ export class ProductService {
       },
     });
     if (!product) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException({
+        message: 'Product not found',
+        code: ProductCodeEnum.PRODUCT_NOT_FOUND,
+      });
     }
     return { data: product };
   }
@@ -88,7 +101,10 @@ export class ProductService {
       },
     });
     if (!product) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException({
+        message: 'Product not found',
+        code: ProductCodeEnum.PRODUCT_NOT_FOUND,
+      });
     }
     return { data: product };
   }
@@ -99,7 +115,10 @@ export class ProductService {
       select: { id: true },
     });
     if (!exists) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException({
+        message: 'Product not found',
+        code: ProductCodeEnum.PRODUCT_NOT_FOUND,
+      });
     }
 
     if (updateProductDto.name) {
@@ -107,7 +126,10 @@ export class ProductService {
         where: { name: updateProductDto.name },
       });
       if (existingProduct && existingProduct.id !== id) {
-        throw new ConflictException('Product with this name already exists');
+        throw new ConflictException({
+          message: 'Product with this name already exists',
+          code: ProductCodeEnum.PRODUCT_NAME_ALREADY_EXISTS,
+        });
       }
     }
 
@@ -116,7 +138,10 @@ export class ProductService {
         where: { id: updateProductDto.categoryId },
       });
       if (!category) {
-        throw new NotFoundException('Category not found');
+        throw new NotFoundException({
+          message: 'Category not found',
+          code: ProductCodeEnum.CATEGORY_NOT_FOUND,
+        });
       }
     }
 
@@ -138,7 +163,10 @@ export class ProductService {
       select: { id: true },
     });
     if (!exists) {
-      throw new NotFoundException('Product not found');
+      throw new NotFoundException({
+        message: 'Product not found',
+        code: ProductCodeEnum.PRODUCT_NOT_FOUND,
+      });
     }
     await this.prisma.product.delete({ where: { id } });
     return { success: true };

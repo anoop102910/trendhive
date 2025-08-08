@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { MediaCodeEnum } from './media.code';
 import { Media, Prisma } from '@prisma/client';
 import { CrudFilter, CrudSort, Pagination } from 'src/utils/query-params';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
@@ -34,12 +35,16 @@ export class MediaService {
   }
 
   async remove(where: Prisma.MediaWhereUniqueInput): Promise<Media> {
-    const media = await this.prisma.media.delete({
+    const media = await this.prisma.media.findUnique({ where });
+    if (!media) {
+      throw new NotFoundException({
+        message: `Media with ID ${where.id} not found`,
+        code: MediaCodeEnum.MEDIA_NOT_FOUND,
+      });
+    }
+    return this.prisma.media.delete({
       where,
     });
-    if (!media) {
-      throw new NotFoundException(`Media with ID ${where.id} not found`);
-    }
     return media;
   }
 }

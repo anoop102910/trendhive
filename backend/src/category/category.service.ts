@@ -26,13 +26,19 @@ export class CategoryService {
       where: { name: createCategoryDto.name },
     });
     if (existingCategory) {
-      throw new ConflictException('Category with this name already exists');
+      throw new ConflictException({
+        message: 'Category with this name already exists',
+        code: CategoryCodeEnum.CATEGORY_NAME_ALREADY_EXISTS,
+      });
     }
     const existingSlug = await this.prisma.category.findUnique({
       where: { slug: createCategoryDto.slug },
     });
     if (existingSlug) {
-      throw new ConflictException('Category with this slug already exists');
+      throw new ConflictException({
+        message: 'Category with this slug already exists',
+        code: CategoryCodeEnum.CATEGORY_SLUG_ALREADY_EXISTS,
+      });
     }
     return this.prisma.category.create({
       data: {
@@ -63,7 +69,10 @@ export class CategoryService {
       where: { id },
     });
     if (!category) {
-      throw new NotFoundException('Category not found');
+      throw new NotFoundException({
+        message: 'Category not found',
+        code: CategoryCodeEnum.CATEGORY_NOT_FOUND,
+      });
     }
     return { data: category };
   }
@@ -73,7 +82,10 @@ export class CategoryService {
       where: { slug },
     });
     if (!category) {
-      throw new NotFoundException('Category not found');
+      throw new NotFoundException({
+        message: 'Category not found',
+        code: CategoryCodeEnum.CATEGORY_NOT_FOUND,
+      });
     }
     return { data: category };
   }
@@ -84,14 +96,20 @@ export class CategoryService {
       select: { id: true },
     });
     if (!exists) {
-      throw new NotFoundException('Category not found');
+      throw new NotFoundException({
+        message: 'Category not found',
+        code: CategoryCodeEnum.CATEGORY_NOT_FOUND,
+      });
     }
     if (updateCategoryDto.name) {
       const existingCategory = await this.prisma.category.findFirst({
         where: { name: updateCategoryDto.name },
       });
       if (existingCategory && existingCategory.id !== id) {
-        throw new ConflictException('Category with this name already exists');
+        throw new ConflictException({
+          message: 'Category with this name already exists',
+          code: CategoryCodeEnum.CATEGORY_NAME_ALREADY_EXISTS,
+        });
       }
     }
     if (updateCategoryDto.slug) {
@@ -99,7 +117,10 @@ export class CategoryService {
         where: { slug: updateCategoryDto.slug },
       });
       if (existingSlug && existingSlug.id !== id) {
-        throw new ConflictException('Category with this slug already exists');
+        throw new ConflictException({
+          message: 'Category with this slug already exists',
+          code: CategoryCodeEnum.CATEGORY_SLUG_ALREADY_EXISTS,
+        });
       }
     }
     return this.prisma.category.update({
@@ -114,7 +135,10 @@ export class CategoryService {
       select: { id: true },
     });
     if (!exists) {
-      throw new NotFoundException('Category not found');
+      throw new NotFoundException({
+        message: 'Category not found',
+        code: CategoryCodeEnum.CATEGORY_NOT_FOUND,
+      });
     }
     await this.prisma.category.delete({
       where: { id },

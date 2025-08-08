@@ -4,6 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { AttributeCodeEnum } from './attribute.code';
 import { CreateAttributeDto, UpdateAttributeDto } from './attribute.dto';
 import { QueryParams } from 'src/utils/query-params';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
@@ -18,7 +19,10 @@ export class AttributeService {
     });
 
     if (existingAttribute) {
-      throw new ConflictException('Attribute with this name already exists');
+      throw new ConflictException({
+        message: 'Attribute with this name already exists',
+        code: AttributeCodeEnum.ATTRIBUTE_ALREADY_EXISTS,
+      });
     }
 
     return this.prisma.attribute.create({
@@ -64,7 +68,10 @@ export class AttributeService {
     });
 
     if (!attribute) {
-      throw new NotFoundException('Attribute not found');
+      throw new NotFoundException({
+        message: 'Attribute not found',
+        code: AttributeCodeEnum.ATTRIBUTE_NOT_FOUND,
+      });
     }
 
     return { data: attribute };
@@ -77,7 +84,10 @@ export class AttributeService {
     });
 
     if (!exists) {
-      throw new NotFoundException('Attribute not found');
+      throw new NotFoundException({
+        message: 'Attribute not found',
+        code: AttributeCodeEnum.ATTRIBUTE_NOT_FOUND,
+      });
     }
 
     if (updateAttributeDto.name) {
@@ -85,7 +95,10 @@ export class AttributeService {
         where: { name: updateAttributeDto.name },
       });
       if (existingAttribute && existingAttribute.id !== id) {
-        throw new ConflictException('Attribute with this name already exists');
+        throw new ConflictException({
+          message: 'Attribute with this name already exists',
+          code: AttributeCodeEnum.ATTRIBUTE_ALREADY_EXISTS,
+        });
       }
     }
 
@@ -123,7 +136,10 @@ export class AttributeService {
     });
 
     if (!exists) {
-      throw new NotFoundException('Attribute not found');
+      throw new NotFoundException({
+        message: 'Attribute not found',
+        code: AttributeCodeEnum.ATTRIBUTE_NOT_FOUND,
+      });
     }
 
     await this.prisma.attribute.delete({
