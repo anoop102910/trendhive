@@ -1,6 +1,7 @@
 import type { DataProvider } from "@refinedev/core";
 import { API_URL } from "../../config/config";
 import { api } from "./api";
+import qs from "qs";
 
 export const dataProvider: DataProvider = {
   getOne: async ({ resource, id }) => {
@@ -9,14 +10,9 @@ export const dataProvider: DataProvider = {
   },
 
   getList: async ({ resource, pagination, sorters, filters, meta }) => {
-    const { data } = await api.get(`/${resource}`, {
-      params: {
-        pagination,
-        sorters,
-        filters,
-        meta,
-      },
-    });
+    const query = qs.stringify({ filters, sorters, meta, pagination }, { arrayFormat: "indices" });
+
+    const { data } = await api.get(`/${resource}/?${query}`);
     return data;
   },
 

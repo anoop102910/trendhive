@@ -43,6 +43,7 @@
     "nestjs-zod": "^4.3.1",
     "nodemailer": "^7.0.3",
     "prisma": "^6.10.1",
+    "qs": "^6.14.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^3.25.67"

@@ -13,6 +13,7 @@ import {
 import { QueryParams } from 'src/utils/query-params';
 import { S3Service } from 'src/client/s3/s3.service';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
+import { CategoryCodeEnum } from './category.code';
 
 @Injectable()
 export class CategoryService {

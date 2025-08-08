@@ -1,8 +1,9 @@
 import { useTable } from "@refinedev/antd";
-import { Table, Space} from "antd";
+import { Table, Space, Input } from "antd";
 import { List, ShowButton, EditButton, DeleteButton } from "@refinedev/antd";
 import { LoadingComponent } from "../../../components/Loading";
 import { ErrorComponent } from "../../../components/Error";
+import { useState } from "react";
 
 interface ICategory {
   id: string;
@@ -19,9 +20,12 @@ interface ICategory {
 }
 
 export const CategoryList = () => {
-  const { tableProps, tableQuery } = useTable<ICategory>({
+  const { tableProps, tableQuery, setFilters } = useTable<ICategory>({
     resource: "categories",
+    initialFilter: [],
   });
+
+  const [searchText, setSearchText] = useState("");
 
   if (tableQuery.isLoading) {
     return <LoadingComponent />;
@@ -31,12 +35,44 @@ export const CategoryList = () => {
     return <ErrorComponent />;
   }
 
+  const handleSearch = (value: string) => {
+    setFilters([
+      {
+        field: "name",
+        operator: "contains",
+        value,
+      },
+    ]);
+  };
+
   const columns = [
     {
       title: "Name",
       dataIndex: "name",
       key: "name",
       sorter: true,
+      filterDropdown: () => (
+        <div style={{ padding: 8 }}>
+          <Input
+            placeholder="Search name"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            onPressEnter={() => handleSearch(searchText)}
+            style={{ marginBottom: 8, display: "block" }}
+          />
+          <Space>
+            <a onClick={() => handleSearch(searchText)}>Search</a>
+            <a
+              onClick={() => {
+                setSearchText("");
+                handleSearch("");
+              }}
+            >
+              Reset
+            </a>
+          </Space>
+        </div>
+      ),
     },
     {
       title: "Slug",

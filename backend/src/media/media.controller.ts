@@ -11,9 +11,14 @@ import { MediaService } from './media.service';
 import { Media, Prisma } from '@prisma/client';
 import { CrudFilter, CrudSort, Pagination } from 'src/utils/query-params';
 
-@Controller('media')
+@Controller('api/media')
 export class MediaController {
   constructor(private readonly mediaService: MediaService) {}
+
+  @Get()
+  getUrl(): Promise<{ url: string }> {
+    return this.mediaService.getUrl();
+  }
 
   @Post()
   create(@Body() createMediaDto: Prisma.MediaCreateInput): Promise<Media> {
@@ -26,7 +31,7 @@ export class MediaController {
     @Query('filters') filters?: string,
     @Query('sorters') sorters?: string,
     @Query('pagination') pagination?: string,
-  ): Promise<Media[]> {
+  ) {
     const parsedFilters: CrudFilter[] = filters ? JSON.parse(filters) : [];
     const parsedSorters: CrudSort[] = sorters ? JSON.parse(sorters) : [];
     const parsedPagination: Pagination = {

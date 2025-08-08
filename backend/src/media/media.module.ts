@@ -9,4 +9,4 @@ import { MediaService } from './media.service';
   providers: [MediaService],
   exports: [MediaService],
 })
-export class CategoryModule {}
+export class MediaModule {}

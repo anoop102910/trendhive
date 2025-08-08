@@ -25,7 +25,9 @@ import {
   TagsOutlined,
   CoffeeOutlined,
   GiftOutlined,
+  UserAddOutlined,
 } from "@ant-design/icons";
+import { UserList } from "./pages/user/UserList";
 
 export default function App() {
   const notificationProvider = useNotificationProvider();
@@ -80,6 +82,11 @@ export default function App() {
               edit: "/discount/edit/:id",
               icon: <GiftOutlined />,
             },
+            {
+              name: "users",
+              list: "/users",
+              icon: <UserAddOutlined />,
+            },
           ]}
         >
           <Routes>
@@ -122,6 +129,9 @@ export default function App() {
                 <Route index element={<DiscountList />} />
                 <Route path="create" element={<DiscountForm />} />
                 <Route path="edit/:id" element={<DiscountForm />} />
+              </Route>
+              <Route path="/users">
+                <Route index element={<UserList />} />
               </Route>
             </Route>
 

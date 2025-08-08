@@ -13,6 +13,8 @@ import { UserModule } from './user/user.module';
 import { CouponModule } from './coupon/coupon.module';
 import { CartModule } from './cart/cart.module';
 import { AddressModule } from './address/address.module';
+import { MediaService } from './media/media.service';
+import { MediaModule } from './media/media.module';
 
 @Module({
   imports: [
@@ -28,6 +30,7 @@ import { AddressModule } from './address/address.module';
     CouponModule,
     CartModule,
     AddressModule,
+    MediaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

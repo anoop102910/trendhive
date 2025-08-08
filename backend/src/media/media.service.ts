@@ -4,10 +4,22 @@ import { MediaCodeEnum } from './media.code';
 import { Media, Prisma } from '@prisma/client';
 import { CrudFilter, CrudSort, Pagination } from 'src/utils/query-params';
 import { parseSorters, parseFilter, parsePagination } from 'src/utils/parsers';
+import { S3Service } from 'src/client/s3/s3.service';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class MediaService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private s3Service: S3Service,
+  ) {}
+
+  async getUrl() {
+    const key = randomUUID();
+    return {
+      url: await this.s3Service.generatePresignedPutUrl(key, 'image/jpeg'),
+    };
+  }
 
   async create(data: Prisma.MediaCreateInput): Promise<Media> {
     return this.prisma.media.create({
@@ -25,13 +37,20 @@ export class MediaService {
     filters?: CrudFilter[];
     sorters?: CrudSort[];
     pagination?: Pagination;
-  }): Promise<Media[]> {
-    return this.prisma.media.findMany({
+  }) {
+    const total = this.prisma.media.count({
+      where: { createdBy: userId, ...parseFilter(filters) },
+    });
+    const medias = this.prisma.media.findMany({
       where: { createdBy: userId, ...parseFilter(filters) },
       orderBy: parseSorters(sorters),
       take: pagination?.pageSize,
       skip: parsePagination(pagination),
     });
+    return {
+      data: medias,
+      total: total,
+    };
   }
 
   async remove(where: Prisma.MediaWhereUniqueInput): Promise<Media> {
@@ -45,6 +64,5 @@ export class MediaService {
     return this.prisma.media.delete({
       where,
     });
-    return media;
   }
 }
