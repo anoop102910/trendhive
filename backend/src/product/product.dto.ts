@@ -60,5 +60,12 @@ export const UpdateProductZodSchema = CreateProductZodSchema.partial().extend({
   updatedBy: z.string().uuid().optional(),
 });
 
+export const CreateProductBatchZodSchema = z.object({
+  products: z.array(CreateProductZodSchema),
+});
+
 export class CreateProductDto extends createZodDto(CreateProductZodSchema) {}
 export class UpdateProductDto extends createZodDto(UpdateProductZodSchema) {}
+export class CreateProductBatchDto extends createZodDto(
+  CreateProductBatchZodSchema,
+) {}

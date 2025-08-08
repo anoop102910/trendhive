@@ -19,7 +19,11 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { ProductService } from './product.service';
-import { CreateProductDto, UpdateProductDto } from './product.dto';
+import {
+  CreateProductDto,
+  UpdateProductDto,
+  CreateProductBatchDto,
+} from './product.dto';
 import { QueryParams } from 'src/utils/query-params';
 import { JwtAuthGuard } from 'src/guards/jwt.auth-guard';
 import { RolesGuard, UserRole } from 'src/guards/roles.guard';
@@ -45,6 +49,20 @@ export class ProductController {
   })
   async create(@Body() createProductDto: CreateProductDto, @Request() req) {
     return this.productService.create(createProductDto, req.user.id);
+  }
+
+  @Post('batch')
+  @Roles(UserRole.Admin)
+  @ApiOperation({ summary: 'Create multiple products in batch' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Batch processing complete',
+  })
+  async createBatch(
+    @Body() createProductBatchDto: CreateProductBatchDto,
+    @Request() req,
+  ) {
+    return this.productService.createBatch(createProductBatchDto, req.user.id);
   }
 
   @Get()
