@@ -51,19 +51,19 @@ export class ProductController {
     return this.productService.create(createProductDto, req.user.id);
   }
 
-  @Post('batch')
-  @Roles(UserRole.Admin)
-  @ApiOperation({ summary: 'Create multiple products in batch' })
-  @ApiResponse({
-    status: HttpStatus.CREATED,
-    description: 'Batch processing complete',
-  })
-  async createBatch(
-    @Body() createProductBatchDto: CreateProductBatchDto,
-    @Request() req,
-  ) {
-    return this.productService.createBatch(createProductBatchDto, req.user.id);
-  }
+  // @Post('batch')
+  // @Roles(UserRole.Admin)
+  // @ApiOperation({ summary: 'Create multiple products in batch' })
+  // @ApiResponse({
+  //   status: HttpStatus.CREATED,
+  //   description: 'Batch processing complete',
+  // })
+  // async createBatch(
+  //   @Body() createProductBatchDto: CreateProductBatchDto,
+  //   @Request() req,
+  // ) {
+  //   return this.productService.createBatch(createProductBatchDto, req.user.id);
+  // }
 
   @Get()
   @ApiOperation({ summary: 'Get all products' })

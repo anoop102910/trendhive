@@ -16,14 +16,6 @@ export class DiscountService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createDiscountDto: CreateDiscountDto) {
-    if (createDiscountDto.code) {
-      const existingDiscount = await this.prisma.discount.findUnique({
-        where: { code: createDiscountDto.code },
-      });
-      if (existingDiscount) {
-        throw new ConflictException(CodeEnum.DISCOUNT_ALREADY_EXISTS);
-      }
-    }
     const { productIds, ...discountData } = createDiscountDto;
 
     return this.prisma.discount.create({
