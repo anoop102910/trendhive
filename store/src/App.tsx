@@ -14,6 +14,8 @@ import { CheckoutPage } from "./pages/checkout";
 import { OrderListPage } from "./pages/orders/list";
 import { OrderShowPage } from "./pages/orders/show";
 import { WishlistPage } from "./pages/wishlist";
+import { AddressPage } from "./pages/address";
+import { ProfilePage } from "./pages/profile";
 
 export default function App() {
   return (
@@ -38,6 +40,8 @@ export default function App() {
               <Route path="/orders" element={<OrderListPage />} />
               <Route path="/orders/:id" element={<OrderShowPage />} />
               <Route path="/wishlist" element={<WishlistPage />} />
+              <Route path="/address" element={<AddressPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Route>
           </Route>
 

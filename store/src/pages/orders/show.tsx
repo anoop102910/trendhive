@@ -7,15 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorComponent } from "@/components/Error";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +25,8 @@ interface OrderItem {
   quantity: number;
   price: number;
   product: {
-    name: string;
+    name:string;
+    image?: string;
   };
 }
 
@@ -52,7 +47,7 @@ interface Order {
 
 export const OrderShowPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { data, isLoading, isError } = useOne<Order>({
+  const { data, isLoading, isError, refetch } = useOne<Order>({
     resource: "orders",
     id,
   });
@@ -81,12 +76,55 @@ export const OrderShowPage: React.FC = () => {
     setIsDialogOpen(false);
   };
 
+  const OrderShowSkeleton = () => (
+    <div className="container mx-auto p-8">
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-8 w-1/4" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="mt-8">
+        <CardHeader>
+          <Skeleton className="h-8 w-1/4" />
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i}>
+                <Skeleton className="w-full h-48" />
+                <CardContent className="p-4 space-y-2">
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-1/3" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <OrderShowSkeleton />;
   }
 
   if (isError) {
-    return <div>Error loading order details.</div>;
+    return <ErrorComponent refetch={refetch} />;
   }
 
   const order = data?.data;
@@ -151,24 +189,25 @@ export const OrderShowPage: React.FC = () => {
           <CardTitle>Order Items</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Price</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {order.items.map(item => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.product.name}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>${item.price.toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {order.items.map(item => (
+              <Card key={item.id}>
+                <img
+                  src={
+                    item.product.image ||
+                    "https://tse1.mm.bing.net/th/id/OIP.Vui1gAtnHmqJTYC5Xi0kMgHaFC?r=0&rs=1&pid=ImgDetMain&o=7&rm=3"
+                  }
+                  alt={item.product.name}
+                  className="w-full h-48 object-cover"
+                />
+                <CardContent className="p-4">
+                  <h3 className="text-lg font-semibold truncate">{item.product.name}</h3>
+                  <p className="text-gray-600">Quantity: {item.quantity}</p>
+                  <p className="text-gray-600">Price: ${item.price.toFixed(2)}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>

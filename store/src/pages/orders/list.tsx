@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useTable, CrudFilter } from "@refinedev/core";
 import { Link } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DollarSign, Package, Calendar } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { DateRange } from "react-day-picker";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { ErrorComponent } from "@/components/Error";
 
 interface Order {
   id: string;
@@ -28,10 +33,19 @@ interface Order {
 }
 
 export const OrderListPage: React.FC = () => {
-  const { tableQueryResult, setFilters, setSorters } = useTable<Order>({
+  const {
+    tableQueryResult,
+    setFilters,
+    setSorters,
+    current,
+    setCurrent,
+    pageCount,
+  } = useTable<Order>({
     resource: "orders",
     syncWithLocation: true,
   });
+
+  const { isLoading, isError, refetch } = tableQueryResult;
 
   const [filters, setLocalFilters] = useState({
     id: "",
@@ -80,6 +94,51 @@ export const OrderListPage: React.FC = () => {
     setSorters([{ field, order }]);
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status.toUpperCase()) {
+      case "PENDING":
+        return "bg-yellow-500";
+      case "PROCESSING":
+        return "bg-blue-500";
+      case "SHIPPED":
+        return "bg-green-500";
+      case "DELIVERED":
+        return "bg-green-700";
+      case "CANCELLED":
+        return "bg-red-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const OrderCardSkeleton = () => (
+    <Card>
+      <CardHeader>
+        <Skeleton className="h-6 w-3/4" />
+      </CardHeader>
+      <CardContent>
+        <div className="flex justify-between items-center mb-4">
+          <Skeleton className="h-6 w-1/4" />
+          <Skeleton className="h-10 w-1/3" />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center">
+            <Skeleton className="h-5 w-5 mr-2" />
+            <Skeleton className="h-5 w-1/2" />
+          </div>
+          <div className="flex items-center">
+            <Skeleton className="h-5 w-5 mr-2" />
+            <Skeleton className="h-5 w-1/3" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  if (isError) {
+    return <ErrorComponent refetch={refetch} />;
+  }
+
   return (
     <div className="container mx-auto p-8">
       <div className="flex justify-between items-center mb-8">
@@ -115,32 +174,61 @@ export const OrderListPage: React.FC = () => {
         <Button onClick={() => handleSortChange("createdAt", "asc")}>Sort by Date Asc</Button>
         <Button onClick={() => handleSortChange("createdAt", "desc")}>Sort by Date Desc</Button>
       </div>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Order ID</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Total</TableHead>
-            <TableHead>Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {orders.map(order => (
-            <TableRow key={order.id}>
-              <TableCell>{order.id}</TableCell>
-              <TableCell>{new Date(order.createdAt).toLocaleDateString()}</TableCell>
-              <TableCell>{order.status}</TableCell>
-              <TableCell>${order.totalAmount.toFixed(2)}</TableCell>
-              <TableCell>
-                <Link to={`/orders/${order.id}`}>
-                  <Button variant="outline">View</Button>
-                </Link>
-              </TableCell>
-            </TableRow>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        {isLoading
+          ? Array.from({ length: 6 }).map((_, i) => <OrderCardSkeleton key={i} />)
+          : orders.map(order => (
+              <Card key={order.id}>
+                <CardHeader>
+                  <CardTitle className="truncate">Order #{order.id}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-between items-center mb-4">
+                    <Badge className={getStatusColor(order.status)}>{order.status}</Badge>
+                    <Link to={`/orders/${order.id}`}>
+                      <Button variant="outline">View Details</Button>
+                    </Link>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center">
+                      <Calendar className="h-5 w-5 mr-2" />
+                      <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center">
+                      <DollarSign className="h-5 w-5 mr-2" />
+                      <span>${order.totalAmount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+      </div>
+      <Pagination className="mt-8">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              onClick={() => setCurrent(current - 1)}
+              aria-disabled={current === 1}
+            />
+          </PaginationItem>
+          {Array.from({ length: pageCount }, (_, i) => i + 1).map(page => (
+            <PaginationItem key={page}>
+              <PaginationLink
+                onClick={() => setCurrent(page)}
+                isActive={current === page}
+              >
+                {page}
+              </PaginationLink>
+            </PaginationItem>
           ))}
-        </TableBody>
-      </Table>
+          <PaginationItem>
+            <PaginationNext
+              onClick={() => setCurrent(current + 1)}
+              aria-disabled={current === pageCount}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
     </div>
   );
 };
