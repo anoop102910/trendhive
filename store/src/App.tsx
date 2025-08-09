@@ -11,6 +11,9 @@ import ShopPage from "./pages/shop";
 import { shadcnNotificationProvider } from "./providers/notification-provider";
 import { CartPage } from "./pages/cart";
 import { CheckoutPage } from "./pages/checkout";
+import { OrderListPage } from "./pages/orders/list";
+import { OrderShowPage } from "./pages/orders/show";
+import { WishlistPage } from "./pages/wishlist";
 
 export default function App() {
   return (
@@ -32,6 +35,9 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/orders" element={<OrderListPage />} />
+              <Route path="/orders/:id" element={<OrderShowPage />} />
+              <Route path="/wishlist" element={<WishlistPage />} />
             </Route>
           </Route>
 
