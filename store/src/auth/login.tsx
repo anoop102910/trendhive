@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import setBox from "@/assets/product-utensil-set.jpg";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email." }),
@@ -36,13 +37,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-gray-100 dark:bg-gray-950">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold">Login</CardTitle>
-          <CardDescription>Enter your email and password to access your account.</CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-950 px-4">
+      <Card className="flex w-full max-w-4xl overflow-hidden md:flex-row flex-col">
+        <div className=" text-gray-700  flex flex-col h-full relative justify-center bg-green-400 items-start md:w-1/2 w-full">
+          <h2 className="text-3xl font-bold mb-4 absolute bottom-10 left-10">
+            Simplify management with our dashboard.
+          </h2>
+          <img src={setBox} alt="Dashboard illustration" className="object-fill" />
+        </div>
+
+        {/* Right Side - Login Form */}
+        <CardContent className="md:w-1/2 w-full p-10 flex flex-col justify-center">
+          <CardHeader className="mb-6 space-y-1">
+            <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
+            <CardDescription>Please login to your account</CardDescription>
+          </CardHeader>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -50,7 +60,7 @@ export default function LoginPage() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>Email address</FormLabel>
                     <FormControl>
                       <Input placeholder="m@example.com" type="email" {...field} />
                     </FormControl>
@@ -76,6 +86,20 @@ export default function LoginPage() {
               </Button>
             </form>
           </Form>
+
+          <div className="mt-6 flex flex-col items-center">
+            <span className="text-sm text-muted-foreground mb-2">Or login with</span>
+            <div className="flex gap-2">
+              <Button variant="outline">Google</Button>
+              <Button variant="outline">Facebook</Button>
+            </div>
+            <p className="mt-4 text-sm text-center">
+              Don&apos;t have an account?{" "}
+              <a href="/register" className="text-orange-500">
+                Signup
+              </a>
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
