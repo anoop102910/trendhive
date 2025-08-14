@@ -1,270 +1,101 @@
-import React from "react";
-import { useApiUrl, useCustom, useCustomMutation } from "@refinedev/core";
-import { ShoppingCart, XCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-
+import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Separator } from "@/components/ui/separator";
-import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
-import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { products } from "@/data/products";
+import { Heart, X } from "lucide-react";
+import { EmptyCart } from "@/components/empty/EmptyCart";
 
-interface IProduct {
-  id: string;
-  name: string;
-  price: number;
-  image?: string;
-}
+const items = products.slice(0, 3).map((p) => ({ ...p, qty: 1 }));
 
-interface ICartItem {
-  id: string;
-  quantity: number;
-  productId: string;
-  product: IProduct;
-}
-
-interface ICart {
-  id: string;
-  userId: string;
-  items: ICartItem[];
-}
-
-const couponFormSchema = z.object({
-  couponCode: z.string().min(1, { message: "Coupon code is required." }),
-});
-
-export const CartPage: React.FC = () => {
-  const apiUrl = useApiUrl();
-  const navigate = useNavigate();
-
-  const {
-    data,
-    isLoading,
-    isError,
-    refetch: refetchCart,
-  } = useCustom<ICart>({
-    url: `${apiUrl}/cart`,
-    method: "get",
-  });
-
-  const { mutate: updateCartMutation } = useCustomMutation();
-  const { mutate: removeCartItemMutation } = useCustomMutation();
-
-  const cart = data?.data;
-
-  const handleUpdateQuantity = (itemId: string, newQuantity: number) => {
-    if (newQuantity < 1) {
-      toast.error("Quantity must be at least 1.");
-      return;
-    }
-    updateCartMutation(
-      {
-        url: `${apiUrl}/cart`,
-        method: "post",
-        values: { itemId, quantity: newQuantity },
-      },
-      {
-        onSuccess: () => {
-          toast.success("Cart updated successfully.");
-          refetchCart();
-        },
-        onError: (error: any) => {
-          toast.error(error.message || "Failed to update cart.");
-        },
-      }
-    );
-  };
-
-  const handleRemoveItem = (itemId: string) => {
-    removeCartItemMutation(
-      {
-        url: `${apiUrl}/cart/items/${itemId}`,
-        method: "delete",
-      },
-      {
-        onSuccess: () => {
-          toast.success("Item removed from cart.");
-          refetchCart();
-        },
-        onError: (error: any) => {
-          toast.error(error.message || "Failed to remove item.");
-        },
-      }
-    );
-  };
-
-  const calculateSubtotal = () => {
-    return cart?.items.reduce((acc, item) => acc + item.product.price * item.quantity, 0) || 0;
-  };
-
-  const couponForm = useForm<z.infer<typeof couponFormSchema>>({
-    resolver: zodResolver(couponFormSchema),
-    defaultValues: {
-      couponCode: "",
-    },
-  });
-
-  const handleCouponSubmit = (values: z.infer<typeof couponFormSchema>) => {
-    toast.info(`Applying coupon: ${values.couponCode}`);
-    // Implement your coupon logic here
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p>Loading cart...</p>
-      </div>
-    );
-  }
-
-  if (isError || !cart) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <p>Error loading cart or cart is empty.</p>
-      </div>
-    );
-  }
+const Cart = () => {
+  const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
+  const discount = subtotal > 100 ? subtotal * 0.1 : 0;
+  const total = subtotal - discount;
 
   return (
-    <div className="container mx-auto p-4 md:p-8">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
-          <Card className="h-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-6 w-6" />
-                Shopping Cart
-              </CardTitle>
-              <CardDescription>Review and manage items in your cart.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {cart.items.length === 0 ? (
-                <p className="text-center text-gray-500">Your cart is empty.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">Product</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead className="text-center">Quantity</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cart.items.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <img
-                            src={
-                              item.product.image ||
-                              `https://images.unsplash.com/photo-1515555431631-f18e9575b63b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1770&q=80`
-                            }
-                            alt={item.product.name}
-                            className="h-16 w-16 object-cover rounded"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <p className="font-medium">{item.product.name}</p>
-                        </TableCell>
-                        <TableCell>${item.product.price.toFixed(2)}</TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                              disabled={item.quantity <= 1}
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
-                            <span className="w-8 text-center">{item.quantity}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                            >
-                              <ChevronUp className="h-4 w-4" />
-                            </Button>
+    <div className="container mx-auto px-4 mt-8">
+      <SEO title="Your Cart – Kitchen Shop" description="Review items in your cart and proceed to checkout." />
+        <div className="flex items-end justify-between mb-6">
+          <h1 className="text-3xl font-display">My Bag</h1>
+          <span className="text-sm text-muted-foreground hidden sm:block">Items are reserved for 60 minutes</span>
+        </div>
+          {items.length === 0 ? (
+            <EmptyCart />
+          ) : (
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-4">
+                {items.map((i) => (
+                  <Card key={i.id} className="overflow-hidden">
+                    <div className="flex gap-4 p-4">
+                      <img src={i.image} alt={i.name} className="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded" loading="lazy" />
+                      <div className="flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-base font-semibold">${i.price.toFixed(2)}</p>
+                            <h3 className="font-medium leading-snug">{i.name}</h3>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          ${(item.product.price * item.quantity).toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveItem(item.id)}
-                          >
-                            <XCircle className="h-5 w-5 text-red-500" />
+                          <Button variant="ghost" size="icon" aria-label={`Remove ${i.name}`}>
+                            <X />
                           </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-              <CardDescription>Proceed to checkout to finalize your order.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between font-medium">
-                <span>Subtotal</span>
-                <span>${calculateSubtotal().toFixed(2)}</span>
-              </div>
-              <Separator />
-              <Form {...couponForm}>
-                <form onSubmit={couponForm.handleSubmit(handleCouponSubmit)} className="space-y-2">
-                  <FormField
-                    control={couponForm.control}
-                    name="couponCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex items-center space-x-2">
-                          <FormControl>
-                            <Input placeholder="Enter coupon code" {...field} />
-                          </FormControl>
-                          <Button type="submit">Apply</Button>
                         </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </form>
-              </Form>
-              <Separator />
-              <div className="flex justify-between font-bold text-lg">
-                <span>Total</span>
-                <span>${calculateSubtotal().toFixed(2)}</span>
+                        <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                          <Select defaultValue="black">
+                            <SelectTrigger className="w-[120px]"><SelectValue placeholder="Color" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="black">Black</SelectItem>
+                              <SelectItem value="olive">Olive</SelectItem>
+                              <SelectItem value="steel">Steel</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select defaultValue="m">
+                            <SelectTrigger className="w-[100px]"><SelectValue placeholder="Size" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="s">S</SelectItem>
+                              <SelectItem value="m">M</SelectItem>
+                              <SelectItem value="l">L</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select defaultValue="1">
+                            <SelectTrigger className="w-[90px]"><SelectValue placeholder="Qty" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">Qty 1</SelectItem>
+                              <SelectItem value="2">Qty 2</SelectItem>
+                              <SelectItem value="3">Qty 3</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="mt-3">
+                          <Button variant="outline" size="sm" aria-label={`Save ${i.name} for later`}>
+                            <Heart className="mr-2" />
+                            Save for later
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </div>
-              <Button onClick={() => navigate("/checkout")} size="lg" className="w-full">
-                Checkout
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+              <Card className="h-fit">
+                <CardHeader>
+                  <CardTitle>Order Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span>Discount</span><span>-${discount.toFixed(2)}</span></div>
+                  <div className="flex justify-between font-medium"><span>Total</span><span>${total.toFixed(2)}</span></div>
+                </CardContent>
+                <CardFooter>
+                  <Button variant="hero" className="w-full" asChild>
+                    <a href="/checkout">Proceed to Checkout</a>
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+          )}
+
     </div>
   );
 };
+
+export default Cart;

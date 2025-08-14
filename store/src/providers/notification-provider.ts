@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 export const shadcnNotificationProvider: NotificationProvider = {
   open: ({ key, message, description, type }) => {
-    console.log(message);
+    console.log(message, description);
     switch (type) {
       case "success":
         toast.success(message, {

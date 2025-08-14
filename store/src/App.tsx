@@ -1,19 +1,34 @@
 import { Refine, Authenticated } from "@refinedev/core";
 import routerProvider from "@refinedev/react-router";
 import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router";
-import { authProvider } from "./providers/auth-provider";
-import Login from "./auth/login";
-import Register from "./auth/register";
-import { dataProvider } from "./providers/data-provider";
-import LandingPage from "./pages/home";
-import Layout from "./components/layout";
-import ShopPage from "./pages/shop";
-import { shadcnNotificationProvider } from "./providers/notification-provider";
-import { CartPage } from "./pages/cart";
-import { CheckoutPage } from "./pages/checkout";
+import { HelmetProvider } from "react-helmet-async";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
 
-export default function App() {
-  return (
+import { authProvider } from "./providers/auth-provider";
+import { dataProvider } from "./providers/data-provider";
+
+import { Layout } from "@/components/layout/Layout";
+import Index from "./pages/Index";
+import NotFound from "./pages/NotFound";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import Orders from "./pages/Orders";
+import Addresses from "./pages/Addresses";
+import Wishlist from "./pages/Wishlist";
+import Profile from "./pages/Profile";
+import Gifts from "./pages/Gifts";
+import Product from "./pages/Product";
+import Shop from "./pages/Shop";
+import OrderDetails from "./pages/OrderDetails";
+import Login from "./auth/Login";
+import Register from "./auth/Register";
+import { shadcnNotificationProvider } from "./providers/notification-provider";
+
+const App = () => (
+  <HelmetProvider>
+    <Toaster />
+    <Sonner />
     <BrowserRouter>
       <Refine
         dataProvider={dataProvider}
@@ -22,6 +37,7 @@ export default function App() {
         notificationProvider={shadcnNotificationProvider}
       >
         <Routes>
+          {/* Authenticated routes */}
           <Route
             element={
               <Authenticated key="authenticated-routes" redirectOnFail="/login">
@@ -30,29 +46,42 @@ export default function App() {
             }
           >
             <Route element={<Layout />}>
-              <Route path="/cart" element={<CartPage />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/orders" element={<Orders />} />
+              <Route path="/addresses" element={<Addresses />} />
+              <Route path="/wishlist" element={<Wishlist />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/gifts" element={<Gifts />} />
+              <Route path="/orders/:id" element={<OrderDetails />} />
+              <Route path="/" element={<Index />} />
+              <Route path="/cart" element={<Cart />} />
+              <Route path="/product/:id" element={<Product />} />
+              <Route path="/shop" element={<Shop />} />
             </Route>
           </Route>
 
-          <Route element={<Layout />}>
-            <Route index element={<LandingPage />} />
-            <Route path="/shop" element={<ShopPage />} />
-          </Route>
-
+          {/* Public / auth pages */}
           <Route
             element={
-              <Authenticated key="auth-pages" fallback={<Outlet />}>
+              <Authenticated key="auth-pages" fallback={<Layout />}>
                 <Navigate to="/" />
               </Authenticated>
             }
           >
-            <Route index element={<LandingPage />} />
+            <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/product/:id" element={<Product />} />
+            <Route path="/shop" element={<Shop />} />
           </Route>
+
+          {/* Catch-all */}
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Refine>
     </BrowserRouter>
-  );
-}
+  </HelmetProvider>
+);
+
+export default App;

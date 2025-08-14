@@ -1,389 +1,100 @@
-import React, { useState } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useApiUrl, useCustomMutation, useCustom } from "@refinedev/core";
-import { CreditCard, MapPin, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
-
+import { SEO } from "@/components/seo/SEO";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { products } from "@/data/products";
 
-const addressFormSchema = z.object({
-  addressLine1: z.string().min(1, "Address Line 1 is required."),
-  addressLine2: z.string().min(1, "Address Line 2 is required."),
-  city: z.string().min(1, "City is required."),
-  state: z.string().min(1, "State is required."),
-  postalCode: z.string().min(1, "Postal code is required."),
-  country: z.string().min(1, "Country is required."),
-});
+const Step = ({ index, label, active }: { index: number; label: string; active: boolean }) => (
+  <div className={`flex items-center gap-2 ${active ? "text-primary" : "text-muted-foreground"}`}>
+    <span className={`h-7 w-7 rounded-full flex items-center justify-center border ${active ? "bg-primary text-primary-foreground" : "bg-secondary"}`}>{index}</span>
+    <span className="text-sm font-medium">{label}</span>
+  </div>
+);
 
-const paymentFormSchema = z.object({
-  paymentMethod: z.enum(["credit_card", "paypal", "cod"], {
-    message: "Please select a payment method.",
-  }),
-});
-
-interface IProduct {
-  id: string;
-  name: string;
-  price: number;
-}
-
-interface ICartItem {
-  id: string;
-  quantity: number;
-  productId: string;
-  product: IProduct;
-}
-
-interface ICart {
-  id: string;
-  userId: string;
-  items: ICartItem[];
-}
-
-export const CheckoutPage: React.FC = () => {
-  const apiUrl = useApiUrl();
-  const [step, setStep] = useState(1);
-
-  const {
-    data: cartData,
-    isLoading: isCartLoading,
-    isError: isCartError,
-  } = useCustom<ICart>({
-    url: `${apiUrl}/cart`,
-    method: "get",
-  });
-
-  const cart = cartData?.data;
-
-  const [address, setAddress] = useState({});
-
-  const addressForm = useForm<z.infer<typeof addressFormSchema>>({
-    resolver: zodResolver(addressFormSchema),
-  });
-
-  const paymentForm = useForm<z.infer<typeof paymentFormSchema>>({
-    resolver: zodResolver(paymentFormSchema),
-  });
-
-  const { mutate: createAddress, isPending: isAddressPending } = useCustomMutation();
-  const { mutate: createOrder, isPending: isOrderPending } = useCustomMutation();
-
-  const handleAddressSubmit = (values: z.infer<typeof addressFormSchema>) => {
-    createAddress(
-      {
-        url: `${apiUrl}/address`,
-        method: "post",
-        values: values,
-      },
-      {
-        onSuccess: data => {
-          toast.success("Address saved successfully!");
-          console.log(data);
-          setAddress(data);
-          setStep(2);
-        },
-        onError: (error: any) => {
-          toast.error(error.message || "Failed to save address.");
-        },
-      }
-    );
-  };
-
-  const handlePaymentSubmit = (values: z.infer<typeof paymentFormSchema>) => {
-    if (!cart) {
-      toast.error("Your cart is empty.");
-      return;
-    }
-
-    console.log({
-      addressId: address.id,
-      paymentMethod: values.paymentMethod,
-    });
-
-    createOrder(
-      {
-        url: `${apiUrl}/orders`,
-        method: "post",
-        values: {
-          addressId: address.id,
-          paymentMethod: values.paymentMethod,
-        },
-      },
-      {
-        onSuccess: () => {
-          toast.success("Order placed successfully!");
-          setStep(3);
-        },
-        onError: (error: any) => {
-          toast.error(error.message || "Failed to place order.");
-        },
-      }
-    );
-  };
-
-  const calculateTotal = () => {
-    if (!cart) return 0;
-    const subtotal = cart.items.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
-    const shipping = 50.0;
-    return subtotal + shipping;
-  };
-
-  if (isCartLoading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <p>Loading cart...</p>
-      </div>
-    );
-  }
-
-  if (isCartError || !cart || cart.items.length === 0) {
-    return (
-      <div className="flex flex-col justify-center items-center min-h-screen p-8 text-center">
-        <h1 className="text-3xl font-bold">Your cart is empty.</h1>
-        <p className="mt-4 text-lg text-gray-500">
-          Looks like you haven't added anything to your cart yet.
-        </p>
-        <Button asChild className="mt-8">
-          <a href="/shop">Start Shopping</a>
-        </Button>
-      </div>
-    );
-  }
+const Checkout = () => {
+  const summary = products.slice(0, 2);
+  const itemSubtotal = summary.reduce((s, i) => s + i.price, 0);
+  const vat = itemSubtotal * 0.21;
+  const shipping = 0;
+  const total = itemSubtotal + vat + shipping;
 
   return (
-    <div className="container mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <div className="lg:col-span-2 space-y-8">
-        {step === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-6 w-6" /> Shipping Address
-              </CardTitle>
-              <CardDescription>Enter the address for your order.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...addressForm}>
-                <form
-                  onSubmit={addressForm.handleSubmit(handleAddressSubmit)}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
-                >
-                  <FormField
-                    control={addressForm.control}
-                    name="addressLine1"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Address Line 1</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Street address, P.O. box, company name, c/o"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addressForm.control}
-                    name="addressLine2"
-                    render={({ field }) => (
-                      <FormItem className="md:col-span-2">
-                        <FormLabel>Address Line 2</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Apartment, suite, unit, building, floor, etc."
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addressForm.control}
-                    name="city"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>City</FormLabel>
-                        <FormControl>
-                          <Input placeholder="City" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addressForm.control}
-                    name="state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>State</FormLabel>
-                        <FormControl>
-                          <Input placeholder="State" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addressForm.control}
-                    name="postalCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Postal Code</FormLabel>
-                        <FormControl>
-                          <Input placeholder="12345" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={addressForm.control}
-                    name="country"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Country</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Country" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="md:col-span-2 flex justify-end">
-                    <Button type="submit" disabled={isAddressPending}>
-                      {isAddressPending ? "Saving Address..." : "Continue to Payment"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
+    <div className="container mx-auto px-4 mt-8">
+      <SEO title="Checkout – Kitchen Shop" description="Secure checkout: add address, payment and confirm order." />
+      <h1 className="text-3xl font-display mb-4">Checkout</h1>
 
-        {step === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-6 w-6" /> Payment Method
-              </CardTitle>
-              <CardDescription>Choose how you would like to pay.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Form {...paymentForm}>
-                <form
-                  onSubmit={paymentForm.handleSubmit(handlePaymentSubmit)}
-                  className="space-y-4"
-                >
-                  <FormField
-                    control={paymentForm.control}
-                    name="paymentMethod"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Method</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a payment method" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="credit_card">Credit Card</SelectItem>
-                            <SelectItem value="paypal">PayPal</SelectItem>
-                            <SelectItem value="cod">Cash on Delivery</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setStep(1)}>
-                      Back to Address
-                    </Button>
-                    <Button type="submit" disabled={isOrderPending}>
-                      {isOrderPending ? "Placing Order..." : "Place Order"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-        )}
-
-        {step === 3 && (
-          <Card className="flex flex-col items-center justify-center p-8 text-center">
-            <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
-            <CardTitle className="text-3xl">Order Placed Successfully!</CardTitle>
-            <CardDescription className="mt-2 text-lg">
-              Thank you for your purchase. Your order details have been sent to your email.
-            </CardDescription>
-            <Button asChild className="mt-8">
-              <a href="/">Continue Shopping</a>
-            </Button>
-          </Card>
-        )}
+      {/* Progress */}
+      <div className="flex items-center gap-6 mb-8">
+        <Step index={1} label="Cart" active={true} />
+        <div className="h-px flex-1 bg-border" />
+        <Step index={2} label="Address" active={true} />
+        <div className="h-px flex-1 bg-border" />
+        <Step index={3} label="Payment" active={true} />
+        <div className="h-px flex-1 bg-border" />
+        <Step index={4} label="Confirm" active={false} />
       </div>
 
-      <div className="lg:col-span-1">
-        <Card>
-          <CardHeader>
-            <CardTitle>Order Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              {cart?.items.map((item, index) => (
-                <div key={index} className="flex justify-between text-sm text-gray-500">
-                  <span>
-                    {item.quantity} x {item.product.name}
-                  </span>
-                  <span>${(item.product.price * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
+      <div className="grid lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader><CardTitle>Customer Info</CardTitle></CardHeader>
+            <CardContent className="grid sm:grid-cols-2 gap-4">
+              <Input placeholder="Email" className="sm:col-span-2" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Shipping Address</CardTitle></CardHeader>
+            <CardContent className="grid sm:grid-cols-2 gap-4">
+              <Input placeholder="First name" />
+              <Input placeholder="Last name" />
+              <Input placeholder="Company (optional)" className="sm:col-span-2" />
+              <Input placeholder="Address" className="sm:col-span-2" />
+              <Input placeholder="Apt, Suite, Etc (optional)" className="sm:col-span-2" />
+              <Input placeholder="City" />
+              <Select defaultValue="us">
+                <SelectTrigger><SelectValue placeholder="Country" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="us">United States</SelectItem>
+                  <SelectItem value="uk">United Kingdom</SelectItem>
+                  <SelectItem value="lt">Lithuania</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input placeholder="Postal Code" />
+              <Input placeholder="Telephone" />
+              <div className="flex items-center justify-between sm:col-span-2 mt-2">
+                <a href="/cart" className="text-sm text-muted-foreground hover:underline">Return to Cart</a>
+                <Button variant="hero">Continue</Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="h-fit">
+          <CardHeader><CardTitle>Your Cart</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {summary.map((s) => (
+              <div key={s.id} className="flex items-center gap-3">
+                <img src={s.image} alt={s.name} className="w-14 h-14 object-cover rounded" loading="lazy" />
+                <div className="text-sm"><p className="font-medium">{s.name}</p><p className="text-muted-foreground">${s.price.toFixed(2)}</p></div>
+              </div>
+            ))}
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              <Input placeholder="Discount Code" className="col-span-2" />
+              <Button variant="secondary" className="w-full">Apply</Button>
             </div>
-            <Separator />
-            <div className="flex justify-between text-sm">
-              <span>Subtotal</span>
-              <span>
-                $
-                {cart?.items
-                  .reduce((acc, item) => acc + item.product.price * item.quantity, 0)
-                  .toFixed(2)}
-              </span>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between"><span>Item Subtotal</span><span>${itemSubtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>VAT</span><span>${vat.toFixed(2)}</span></div>
+              <div className="flex justify-between"><span>Shipping</span><span>${shipping.toFixed(2)}</span></div>
             </div>
-            <div className="flex justify-between text-sm">
-              <span>Shipping</span>
-              <span>$50.00</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between font-bold text-lg">
-              <span>Order Total</span>
-              <span>${calculateTotal().toFixed(2)}</span>
-            </div>
+            <div className="flex justify-between pt-2 font-medium text-base"><span>Total</span><span>${total.toFixed(2)}</span></div>
           </CardContent>
         </Card>
       </div>
     </div>
   );
 };
+
+export default Checkout;
